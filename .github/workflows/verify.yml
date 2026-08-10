@@ -1,0 +1,56 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  runtime:
+    name: Runtime (${{ matrix.os }}, Node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        node: [20, 22, 24]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck:cli
+      - run: npm test -w packages/core
+      - run: npm test -w packages/providers
+      - run: npm test -w packages/roblox
+      - run: npm test -w apps/cli
+      - run: npm run pack:cli
+      - name: Install packed CLI
+        shell: bash
+        run: |
+          smoke_dir="$(mktemp -d)"
+          npm install --prefix "$smoke_dir" --ignore-scripts "$PWD/vectiscode-0.1.0-alpha.0.tgz"
+          "$smoke_dir/node_modules/.bin/vectiscode" --help
+          "$smoke_dir/node_modules/.bin/vectiscode" doctor
+
+  repository:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run audit:bundle
+      - run: npm run audit:dependencies
+      - run: npm run test:visual

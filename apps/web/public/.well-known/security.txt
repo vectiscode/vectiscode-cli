@@ -1,0 +1,5 @@
+Contact: mailto:contact@vectiscode.com
+Expires: 2027-06-03T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://vectiscode.com/.well-known/security.txt
+Policy: https://vectiscode.com/privacy

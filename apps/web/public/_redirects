@@ -1,0 +1,11 @@
+/legal/impressum.md /legal/privacy-policy.md 301
+/impressum / 301
+/assets/* /404.html 404
+/images/* /404.html 404
+/js/* /404.html 404
+/robots.txt /404.html 404
+/sitemap.xml /404.html 404
+/llms.txt /404.html 404
+/llms-full.txt /404.html 404
+/* /index.html 200
+

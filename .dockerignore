@@ -1,0 +1,17 @@
+node_modules
+.git
+.env
+.env.production
+*.md
+scratch
+docs
+plugins
+apps/web/src
+apps/web/public
+apps/web/dist
+apps/web/node_modules
+apps/web/vite.config.ts
+apps/web/tsconfig.json
+apps/web/index.html
+data
+service-account.json

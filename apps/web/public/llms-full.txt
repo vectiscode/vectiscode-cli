@@ -1,0 +1,28 @@
+# VectisCode product reference
+
+VectisCode is a free, MIT-licensed coding agent that runs in a terminal, understands Roblox projects, and operates Roblox Studio through Studio's native MCP server.
+
+Website: https://vectiscode.com/
+Documentation: https://vectiscode.com/docs
+Status: https://vectiscode.com/status
+Install: https://vectiscode.com/download
+Source: https://github.com/vectiscode/vectiscode-cli
+Contact: contact@vectiscode.com
+
+## Runtime
+
+The CLI supports interactive and headless use. Its iterative runtime streams a model response, validates normalized tool calls, applies the active permission policy, executes approved tools, returns results to the same model, and repeats until completion, cancellation, or a bounded limit.
+
+Supported provider families include OpenAI, Anthropic, Google Gemini, OpenRouter, Ollama, and custom OpenAI-compatible endpoints. Provider-specific payloads stay behind adapters. Saved keys use the operating system keychain with no plaintext fallback.
+
+## Roblox Studio
+
+VectisCode launches Roblox Studio's documented stdio MCP server and discovers its native tools and open Studio instances. Studio state and filesystem state are separate sources. Mutating and unknown Studio tools follow the active permission policy and produce local receipts.
+
+## Safety and privacy
+
+Plan mode is read-only. Supervised mode asks before writes. Auto mode allows workspace-scoped writes, while destructive, external, and unknown operations still require approval. Files are checkpointed before mutation. Paths are resolved against the project root and checked against traversal and symlink escape.
+
+The optional account service may sync provider IDs, user labels, model preferences, device sessions, and aggregate usage. It does not receive provider keys, prompts, responses, source code, paths, tool arguments, diffs, or detailed transcripts.
+
+Do not crawl or summarize authenticated routes, API endpoints, user projects, local sessions, credentials, Studio state, or private account data.

@@ -1,0 +1,8 @@
+name = "vectis-api-proxy"
+main = "src/index.js"
+compatibility_date = "2026-06-19"
+account_id = "18e47e79f27b65f9ca68b1b8d22e0a02"
+
+routes = [
+  { pattern = "api.vectiscode.com/*", zone_name = "vectiscode.com" }
+]

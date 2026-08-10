@@ -1,0 +1,62 @@
+{
+  "name": "vectis-code",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/tsconfig",
+    "packages/contracts",
+    "packages/core",
+    "packages/providers",
+    "packages/roblox",
+    "packages/testkit",
+    "apps/api",
+    "apps/web",
+    "apps/cli"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
+    "dev:api:test": "node scripts/dev-api-test-env.mjs",
+    "build:contracts": "npm run build -w packages/contracts",
+    "build:runtime": "npm run build -w packages/core && npm run build -w packages/providers && npm run build -w packages/roblox && npm run build -w packages/testkit",
+    "build:cli": "npm run build:runtime && npm run build -w apps/cli",
+    "build": "npm run build:contracts && npm run build:runtime && npm run build -w apps/api && npm run build -w apps/web && npm run build -w apps/cli",
+    "test": "npm run test -w packages/core && npm run test -w packages/providers && npm run test -w packages/roblox && npm run test -w apps/cli && npm run test -w apps/api",
+    "typecheck": "npm run build:contracts && npm run typecheck -w packages/core && npm run typecheck -w packages/providers && npm run typecheck -w packages/roblox && npm run typecheck -w packages/testkit && npm run typecheck -w apps/cli && npm run typecheck -w apps/api && npm run typecheck -w apps/web",
+    "typecheck:api": "npm run build:contracts && npm run typecheck -w apps/api",
+    "typecheck:web": "npm run build:contracts && npm run typecheck -w apps/web",
+    "typecheck:cli": "npm run typecheck -w packages/core && npm run typecheck -w packages/providers && npm run typecheck -w packages/roblox && npm run typecheck -w apps/cli",
+    "build:api": "npm run build:contracts && npm run build -w apps/api",
+    "build:web": "npm run build:contracts && npm run build -w apps/web",
+    "pack:cli": "npm run build:cli && npm pack -w apps/cli",
+    "test:visual": "playwright test -c apps/web/playwright.config.ts",
+    "audit:bundle": "node scripts/check-bundle-size.mjs",
+    "audit:dependencies": "node scripts/check-dependency-audit.mjs",
+    "smoke:models": "node scripts/model-health-smoke.mjs",
+    "smoke:models:patch": "node scripts/model-health-smoke.mjs --patch",
+    "smoke:thinking": "node scripts/thinking-matrix-smoke.mjs",
+    "smoke:agent": "node scripts/smoke-agent.mjs",
+    "smoke:nvidia:thinking": "node scripts/nvidia-thinking-matrix.mjs",
+    "audit:traffic": "node scripts/cloudflare-traffic-audit.mjs",
+    "dashboard:providers": "node scripts/provider-dashboard.mjs",
+    "supabase:list": "node scripts/supabase-list-projects.mjs",
+    "supabase:apply-schema": "node scripts/supabase-apply-schema.mjs",
+    "backup:check": "node scripts/supabase-backup.mjs --check",
+    "backup:create": "node scripts/supabase-backup.mjs",
+    "restore:verify": "node scripts/supabase-restore-verify.mjs",
+    "canary:production": "node scripts/production-canary.mjs",
+    "verify": "npm run typecheck && npm run test && npm run build && npm run audit:bundle && npm run audit:dependencies && npm run test:visual",
+    "deploy:api": "node scripts/huggingface-deploy.mjs",
+    "deploy:web": "node scripts/build-web.mjs && node scripts/cloudflare-pages-deploy.mjs",
+    "deploy:health": "node scripts/post-deploy-health-check.mjs",
+    "deploy": "npm run deploy:api && npm run deploy:web && npm run deploy:health",
+    "deploy:verify": "node scripts/deploy-verify.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "concurrently": "^10.0.3",
+    "wrangler": "^4.97.0"
+  },
+  "dependencies": {
+    "pg": "^8.21.0"
+  }
+}
