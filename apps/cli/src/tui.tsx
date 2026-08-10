@@ -66,14 +66,32 @@ function TuiApp({ initialSessionId }: { initialSessionId?: string }) {
 
   const handleCommand = (value: string): boolean => {
     const [command, ...argumentsValue] = value.slice(1).split(/\s+/);
-    if (command === "help") add("system", "/new /sessions /provider <id> /model <id> /mode <plan|supervised|auto> /studio /clear /exit");
+    if (command === "help") add("system", "/connect /models [provider] /new /sessions /agent <build|plan> /permissions /compact /undo <checkpoint> /redo /mcp /studio /playtest /verify /clear /exit");
     else if (command === "clear") setItems([]);
     else if (command === "new") { setSessionId(undefined); add("system", "A new session will start with the next prompt."); }
-    else if (command === "sessions") add("system", sessionStore.listSessions().slice(0, 8).map((session) => `${session.id.slice(0, 8)}  ${session.projectName}  ${session.provider}/${session.model}`).join("\n") || "No sessions yet.");
+    else if (command === "sessions") add("system", sessionStore.listSessions().slice(0, 8).map((session) => `${session.id.slice(0, 8)}  ${session.projectName}  ${session.provider}/${session.model}  ${session.permissionMode}`).join("\n") || "No sessions yet.");
+    else if (command === "connect") add("system", studioMcp.status().connected ? `Connected: ${studioMcp.status().detail}` : `Offline: ${studioMcp.status().detail}. Run vectiscode studio connect`);
+    else if (command === "models") {
+      const target = argumentsValue[0] ?? providerId;
+      void registry.current.get(target).listModels().then((models) => add("system", models.slice(0, 12).map((modelItem) => `  ${modelItem.id}`).join("\n") || `No models for ${target}`)).catch(() => add("system", `Could not list models for ${target}`));
+    }
     else if (command === "provider" && argumentsValue[0]) setProviderId(argumentsValue[0]);
     else if (command === "model" && argumentsValue[0]) setModel(argumentsValue[0]);
     else if (command === "mode" && ["plan", "supervised", "auto"].includes(argumentsValue[0])) setMode(argumentsValue[0] as PermissionMode);
+    else if (command === "agent" && argumentsValue[0]) {
+      if (argumentsValue[0] === "plan") setMode("plan");
+      else if (argumentsValue[0] === "build") setMode("supervised");
+      else add("system", "Agent must be build or plan");
+      add("system", `Agent set to ${argumentsValue[0]}`);
+    }
+    else if (command === "permissions") add("system", `Current: ${mode}. Plan is read-only, supervised asks before writes, auto allows workspace writes. Unknown and destructive tools always ask.`);
+    else if (command === "compact") add("system", "Compaction keeps last 20 turns in context and summarizes older turns. Run vectiscode doctor for token usage");
+    else if (command === "undo" && argumentsValue[0]) add("system", `Undo uses checkpoint ${argumentsValue[0]}. Run vectiscode undo ${argumentsValue[0]} or vectiscode rollback ${argumentsValue[0]}`);
+    else if (command === "redo") add("system", "Redo reapplies the last undone filesystem change. Only filesystem and reversible Studio mutations support turn-level undo and redo");
+    else if (command === "mcp") add("system", studioMcp.status().connected ? `MCP connected with ${studioMcp.status().toolCount} tools` : "MCP offline");
     else if (command === "studio") add("system", `${studioMcp.status().connected ? "Studio connected" : "Studio offline"}: ${studioMcp.status().detail}`);
+    else if (command === "playtest") add("system", "Playtest is approval-gated. Use Studio MCP playtest tools from an approved turn");
+    else if (command === "verify") add("system", "Verification uses Luau, Selene, StyLua, Rojo when installed. Missing tools are reported without silent install");
     else if (command === "exit" || command === "quit") exit();
     else add("system", `Unknown command: /${command}. Use /help.`);
     return true;

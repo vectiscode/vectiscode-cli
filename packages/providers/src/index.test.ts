@@ -25,7 +25,7 @@ function adapter(id: string): ProviderAdapter {
 describe("provider registry", () => {
   it("publishes one canonical adapter for every supported provider", () => {
     const ids = createProviderRegistry(vault).list().map((provider) => provider.id);
-    expect(ids).toEqual(["openai", "anthropic", "google", "openrouter", "ollama", "openai-compatible"]);
+    expect(ids).toEqual(["openai", "anthropic", "google", "openrouter", "ollama", "openai-compatible", "xai", "azure", "lmstudio"]);
     expect(new Set(ids).size).toBe(ids.length);
   });
 

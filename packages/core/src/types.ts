@@ -11,6 +11,44 @@ export interface ProviderCapabilities {
   parallelToolCalls: boolean;
 }
 
+export interface ProviderModel {
+  id: string;
+  label: string;
+  provider: string;
+  capabilities: ProviderCapabilities;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  supportsReasoning?: boolean;
+  supportsImages?: boolean;
+  supportsTools?: boolean;
+  streaming?: boolean;
+}
+
+export type ProviderAuthMethod = "api_key" | "oauth" | "none";
+
+export interface ProviderAuth {
+  method: ProviderAuthMethod;
+  envVar?: string;
+  loginHint?: string;
+}
+
+export interface ProviderError {
+  code: "authentication" | "billing" | "rate_limit" | "timeout" | "network" | "context_limit" | "unsupported_feature" | "invalid_model" | "server" | "unknown";
+  message: string;
+  retryable: boolean;
+  retryAfterMs?: number;
+}
+
+export type ProviderStreamEventType = "text_delta" | "reasoning_delta" | "tool_call_delta" | "usage" | "error" | "done";
+
+export interface ProviderStreamEvent {
+  type: ProviderStreamEventType;
+  delta?: string;
+  toolCall?: { index: number; id?: string; name?: string; argumentsDelta?: string };
+  usage?: UsageRecord;
+  error?: ProviderError;
+}
+
 export interface UsageRecord {
   provider: string;
   model: string;

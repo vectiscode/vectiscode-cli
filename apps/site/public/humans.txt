@@ -1,0 +1,14 @@
+/* TEAM */
+
+Product: Vectis Code (vectiscode)
+Site: https://vectiscode.com
+Contact: contact@vectiscode.com
+Discord: https://discord.gg/f6Ud9JaVBV
+Twitter: https://x.com/vectiscode
+
+/* SITE */
+
+Description: Free and open-source local coding agent for Roblox creators.
+Stack: React 19, TypeScript, Vite, Node, Express, Supabase Postgres, Cloudflare Pages, Hugging Face Spaces.
+Components: Node.js CLI, local provider adapters, native Roblox Studio MCP client, optional web account.
+Standards: HTML5, JSON-LD, OpenGraph, llms.txt, llms-full.txt, security.txt.

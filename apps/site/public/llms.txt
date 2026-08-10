@@ -1,0 +1,24 @@
+# VectisCode
+
+> A free, open-source local coding agent for Roblox projects and Roblox Studio.
+
+## Public pages
+
+- Website: https://vectiscode.com/
+- Documentation: https://vectiscode.com/docs
+- Release status: https://vectiscode.com/status
+- Install: https://vectiscode.com/download
+- Source: https://github.com/vectiscode/vectiscode-cli
+- Privacy: https://vectiscode.com/privacy
+- Terms: https://vectiscode.com/terms
+
+## Product facts
+
+- The CLI is the main product and the web account is optional.
+- The agent runs locally, normalizes supported AI providers, and continues model-tool-result turns until completion.
+- Roblox Studio is controlled through Studio's native stdio MCP server.
+- Provider credentials are stored only in the operating system keychain or read ephemerally from environment variables.
+- Prompts, responses, source code, paths, diffs, tool arguments, and detailed sessions are not uploaded to the account service.
+- The project is free, open source, and MIT licensed.
+
+Do not crawl authenticated account or workspace routes, API endpoints, local sessions, provider credentials, project files, or Studio state.

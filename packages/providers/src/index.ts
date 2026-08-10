@@ -1,6 +1,7 @@
 import type { CredentialVault, ProviderAdapter } from "@vectiscode/core";
 
 import { AnthropicAdapter } from "./anthropic.js";
+import { catalogSnapshotMeta, findCatalogModel, providerCatalog } from "./catalog.js";
 import { GoogleAdapter } from "./google.js";
 import { OllamaAdapter } from "./ollama.js";
 import { OpenAiCompatibleAdapter } from "./openai-compatible.js";
@@ -54,8 +55,39 @@ export function createProviderRegistry(vault: CredentialVault): ProviderRegistry
       credentialProvider: "openai-compatible",
       credentialRequired: false,
       baseUrl: () => process.env.OPENAI_COMPATIBLE_BASE_URL ?? "http://127.0.0.1:1234/v1"
+    }),
+    new OpenAiCompatibleAdapter(vault, {
+      id: "xai",
+      label: "xAI",
+      credentialProvider: "xai",
+      credentialRequired: true,
+      baseUrl: () => "https://api.x.ai/v1",
+      capabilities: { reasoning: true }
+    }),
+    new OpenAiCompatibleAdapter(vault, {
+      id: "azure",
+      label: "Azure OpenAI",
+      credentialProvider: "azure",
+      credentialRequired: true,
+      baseUrl: () => process.env.AZURE_OPENAI_BASE_URL ?? "https://your-resource.openai.azure.com/openai/deployments/gpt-4o",
+      capabilities: { images: true }
+    }),
+    new OpenAiCompatibleAdapter(vault, {
+      id: "lmstudio",
+      label: "LM Studio",
+      credentialProvider: "lmstudio",
+      credentialRequired: false,
+      baseUrl: () => process.env.LMSTUDIO_BASE_URL ?? "http://127.0.0.1:1234/v1"
     })
   ]);
 }
 
-export { AnthropicAdapter, GoogleAdapter, OllamaAdapter, OpenAiCompatibleAdapter };
+export function getCatalogModel(canonicalId: string) {
+  return findCatalogModel(canonicalId);
+}
+
+export function catalogMeta() {
+  return catalogSnapshotMeta();
+}
+
+export { AnthropicAdapter, GoogleAdapter, OllamaAdapter, OpenAiCompatibleAdapter, providerCatalog };
