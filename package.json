@@ -27,7 +27,7 @@
     "typecheck:api": "npm run build:contracts && npm run typecheck -w apps/api",
     "typecheck:web": "npm run build:contracts && npm run typecheck -w apps/web",
     "typecheck:site": "npm run build:contracts && npm run typecheck -w apps/site",
-    "typecheck:cli": "npm run typecheck -w packages/core && npm run typecheck -w packages/providers && npm run typecheck -w packages/roblox && npm run typecheck -w apps/cli",
+    "typecheck:cli": "npm run build:contracts && npm run typecheck -w packages/core && npm run typecheck -w packages/providers && npm run typecheck -w packages/roblox && npm run typecheck -w apps/cli",
     "build:api": "npm run build:contracts && npm run build -w apps/api",
     "build:web": "npm run build:contracts && npm run build -w apps/web",
     "pack:cli": "npm run build:cli && npm pack -w apps/cli",

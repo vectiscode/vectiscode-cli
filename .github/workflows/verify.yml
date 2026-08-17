@@ -29,13 +29,8 @@ jobs:
       - run: npm test -w packages/roblox
       - run: npm test -w apps/cli
       - run: npm run pack:cli
-      - name: Install packed CLI
-        shell: bash
-        run: |
-          smoke_dir="$(mktemp -d)"
-          npm install --prefix "$smoke_dir" --ignore-scripts "$PWD/vectiscode-0.1.0-alpha.0.tgz"
-          "$smoke_dir/node_modules/.bin/vectiscode" --help
-          "$smoke_dir/node_modules/.bin/vectiscode" doctor
+      - name: Smoke test packed CLI
+        run: node scripts/smoke-packed-cli.mjs
 
   repository:
     runs-on: ubuntu-latest
@@ -48,9 +43,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - run: npm run check:emdash
+      - run: npm run check:attribution
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
       - run: npm run audit:bundle
       - run: npm run audit:dependencies
+      - run: npm run verify:connector
+      - run: npm run audit:bridge
       - run: npm run test:visual
