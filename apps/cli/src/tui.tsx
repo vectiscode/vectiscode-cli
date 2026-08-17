@@ -28,6 +28,33 @@ interface ApprovalRequest {
   resolve: (value: boolean | "approve-session") => void;
 }
 
+interface SlashCommand {
+  name: string;
+  args?: string;
+  category: "Studio" | "Model" | "Session" | "System";
+  description: string;
+}
+
+const SLASH_COMMANDS: SlashCommand[] = [
+  { name: "/connect", description: "Connect or check Roblox Studio MCP server", category: "Studio" },
+  { name: "/studio", args: "<status|select>", description: "Inspect or select active Studio instance", category: "Studio" },
+  { name: "/playtest", args: "<start|stop>", description: "Start or stop playtesting in Roblox Studio", category: "Studio" },
+  { name: "/verify", description: "Run Studio visual QA, console capture, and diagnostics", category: "Studio" },
+  { name: "/mcp", description: "List connected Roblox Studio MCP tools and risk levels", category: "Studio" },
+  { name: "/models", args: "[provider]", description: "List available models for provider", category: "Model" },
+  { name: "/provider", args: "<id>", description: "Switch active provider (e.g. openai, anthropic, google, groq, ollama)", category: "Model" },
+  { name: "/model", args: "<name>", description: "Switch active model (e.g. gpt-4o, claude-3-7-sonnet, gemini-2.5-pro)", category: "Model" },
+  { name: "/agent", args: "<plan|build>", description: "Switch mode: plan (read-only) or build (supervised writes)", category: "System" },
+  { name: "/permissions", description: "View current permission mode and policy rules", category: "System" },
+  { name: "/sessions", args: "[id]", description: "List saved sessions or resume by ID / index", category: "Session" },
+  { name: "/new", description: "Start a fresh session", category: "Session" },
+  { name: "/compact", description: "Compact session context to free up token budget", category: "Session" },
+  { name: "/undo", args: "<checkpointId>", description: "Roll back a file mutation checkpoint", category: "Session" },
+  { name: "/clear", description: "Clear transcript screen", category: "System" },
+  { name: "/help", description: "Show all available commands and keyboard shortcuts", category: "System" },
+  { name: "/exit", description: "Exit VectisCode TUI", category: "System" }
+];
+
 export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject }) => {
   const { exit } = useApp();
   const config = loadConfig(initialProject);
@@ -43,6 +70,7 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
   const [receiptCount, setReceiptCount] = useState(0);
   const [providerReady, setProviderReady] = useState(false);
   const [queuedPrompt, setQueuedPrompt] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   const controller = useRef<AbortController | null>(null);
   const registry = useRef(createProviderRegistry(credentialVault));
@@ -51,6 +79,15 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
   useEffect(() => {
     void registry.current.get(providerId).validate().then((outcome) => setProviderReady(outcome.ok)).catch(() => setProviderReady(false));
   }, [providerId]);
+
+  const commandQuery = input.startsWith("/") ? input.slice(1).toLowerCase().split(/\s+/)[0] : null;
+  const filteredCommands = commandQuery !== null
+    ? SLASH_COMMANDS.filter((cmd) => cmd.name.slice(1).toLowerCase().startsWith(commandQuery))
+    : [];
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [input]);
 
   useInput((character, key) => {
     if (approval) {
@@ -71,6 +108,25 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
         return;
       }
     }
+
+    if (filteredCommands.length > 0 && input.startsWith("/")) {
+      if (key.upArrow) {
+        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : filteredCommands.length - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setSelectedIndex((prev) => (prev < filteredCommands.length - 1 ? prev + 1 : 0));
+        return;
+      }
+      if (key.tab) {
+        const chosen = filteredCommands[selectedIndex];
+        if (chosen) {
+          setInput(chosen.args ? `${chosen.name} ` : chosen.name);
+        }
+        return;
+      }
+    }
+
     if (key.escape || (key.ctrl && character === "c")) {
       if (running) {
         controller.current?.abort("Cancelled by user");
@@ -91,22 +147,34 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
 
     if (command === "help") {
       add("system", [
-        "Commands:",
-        "  /connect              Connect or check Studio MCP server",
+        "VectisCode CLI Commands",
+        "",
+        "Studio MCP Integration:",
+        "  /connect              Connect or verify Roblox Studio MCP server",
+        "  /studio <status>      Inspect active Roblox Studio connection",
+        "  /playtest <start|stop> Control Studio playtesting session",
+        "  /verify               Run Studio visual QA and diagnostics probe",
+        "  /mcp                  List connected Studio MCP tools and risk levels",
+        "",
+        "Provider & Models:",
         "  /models [provider]    List available models for provider",
-        "  /provider <id>        Switch active provider (e.g. anthropic, openai, google)",
-        "  /model <name>         Switch active model (e.g. claude-3-7-sonnet, gpt-4o)",
-        "  /agent <plan|build>   Switch mode: plan (read-only) or build (supervised)",
-        "  /permissions          View current permission mode and policy",
-        "  /sessions [id]        List sessions or switch to session ID",
-        "  /new                  Start a new session",
+        "  /provider <id>        Switch active provider (e.g. openai, anthropic, google, groq, ollama)",
+        "  /model <name>         Switch active model (e.g. gpt-4o, claude-3-7-sonnet, gemini-2.5-pro)",
+        "",
+        "Sessions & Files:",
+        "  /sessions [id]        List saved sessions or resume by ID / index",
+        "  /new                  Start a fresh conversation session",
         "  /compact              Compact active session context",
-        "  /undo [checkpointId]  Roll back a file mutation checkpoint",
-        "  /playtest [start|stop] Control Roblox Studio playtest",
-        "  /verify               Run Studio visual QA and diagnostics",
-        "  /mcp                  List connected Studio MCP tools",
-        "  /clear                Clear transcript screen",
-        "  /exit                 Exit VectisCode"
+        "  /undo <checkpointId>  Roll back a file mutation checkpoint",
+        "",
+        "Agent & System:",
+        "  /agent <plan|build>   Switch mode: plan (read-only) or build (supervised writes)",
+        "  /permissions          View current permission rules and risk policy",
+        "  /clear                Clear transcript messages from the screen",
+        "  /help                 Show this help overview",
+        "  /exit                 Exit the TUI",
+        "",
+        "Tip: Type / in the prompt to open the command palette. Use Tab to autocomplete."
       ].join("\n"));
     } else if (command === "clear") {
       setItems([]);
@@ -154,6 +222,9 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
       } catch (err) {
         add("system", `Connection failed: ${err instanceof Error ? err.message : String(err)}`);
       }
+    } else if (command === "studio") {
+      const status = studioMcp.status();
+      add("system", `Studio MCP Status:\n  Launcher: ${status.command}\n  Connected: ${status.connected ? "Yes" : "No"}\n  Detail: ${status.detail}`);
     } else if (command === "models") {
       const target = argumentsValue[0] ?? providerId;
       try {
@@ -363,6 +434,31 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
         ))}
       </Box>
 
+      {filteredCommands.length > 0 && input.startsWith("/") && (
+        <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} marginBottom={1}>
+          <Box justifyContent="space-between" marginBottom={0}>
+            <Text bold color="cyan">Commands ({filteredCommands.length})</Text>
+            <Text dimColor>↑/↓ navigate • Tab complete • Enter run</Text>
+          </Box>
+          {filteredCommands.slice(0, 7).map((cmd, index) => {
+            const isSelected = index === selectedIndex;
+            return (
+              <Box key={cmd.name} justifyContent="space-between">
+                <Text color={isSelected ? "cyan" : "white"} bold={isSelected}>
+                  {isSelected ? "▶ " : "  "}{cmd.name} {cmd.args ? chalk.dim(cmd.args) : ""}
+                </Text>
+                <Text dimColor={!isSelected} color={isSelected ? "yellow" : undefined}>
+                  {cmd.description}
+                </Text>
+              </Box>
+            );
+          })}
+          {filteredCommands.length > 7 && (
+            <Text dimColor italic>  ...and {filteredCommands.length - 7} more. Keep typing to filter.</Text>
+          )}
+        </Box>
+      )}
+
       {approval ? (
         <Box borderStyle="single" borderColor="yellow" paddingX={1} flexDirection="column">
           <Text bold color="yellow">Permission Required: {approval.call.name}</Text>
@@ -372,7 +468,7 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
       ) : (
         <Box borderStyle="single" borderColor={running ? "yellow" : "gray"} paddingX={1}>
           <Text bold color="cyan">&gt; </Text>
-          <TextInput value={input} onChange={setInput} onSubmit={(v) => void submit(v)} placeholder="Ask a question, request changes, or type /help" />
+          <TextInput value={input} onChange={setInput} onSubmit={(v) => void submit(v)} placeholder="Ask a question, request changes, or type / for commands" />
         </Box>
       )}
     </Box>
