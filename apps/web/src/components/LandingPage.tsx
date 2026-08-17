@@ -108,7 +108,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
       {children}
       <footer className="vc-footer">
         <div className="vc-shell vc-footer-row">
-          <div><strong>vectiscode</strong><span>Open source. Local-first for Roblox.</span></div>
+          <div><strong>vectiscode</strong><span>Open source. Local-first coding agent for Roblox.</span></div>
           <nav>
             <Link to="/docs">Docs</Link><Link to="/status">Status</Link><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link>
             <a href={GITHUB_URL} target="_blank" rel="noreferrer">Source</a><a href={DISCORD_URL} target="_blank" rel="noreferrer">Discord</a>
@@ -125,37 +125,126 @@ export function LandingPage() {
       <main className="vc-home">
         <section className="vc-home-hero vc-shell">
           <div className="vc-home-hero-copy">
-            <p className="vc-kicker"><span />Open source coding agent for Roblox</p>
-            <h1>Build in Roblox.<br /><em>Stay in control.</em></h1>
-            <p className="vc-home-lede">Roblox AI coding agent that runs in your terminal. Operates Studio directly through its official MCP server. Prompts and diffs stay between you and your chosen AI provider.</p>
+            <p className="vc-kicker"><span />Roblox Studio MCP Coding Agent</p>
+            <h1>Build in Roblox. Stay in control.</h1>
+            <p className="vc-home-lede">
+              A local-first terminal coding agent that operates Roblox Studio through Studio's official MCP server. Inspect game trees, review diffs before applying, and test changes live.
+            </p>
             <div className="vc-home-actions">
-              <Link className="vc-button is-primary" to="/docs">Get started</Link>
-              <a className="vc-text-link" href={GITHUB_URL} target="_blank" rel="noreferrer">View source <span>-&gt;</span></a>
+              <Link className="vc-button is-primary" to="/docs">Read documentation</Link>
+              <a className="vc-button is-secondary" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub repository</a>
             </div>
           </div>
           <div className="vc-home-install">
             <InstallCommand />
-            <p>MIT licensed. Node 20+ and Bun. Windows and macOS.</p>
+            <p>MIT licensed. Node 20+ and Bun. Windows & macOS.</p>
+          </div>
+        </section>
+
+        <section className="vc-shell vc-terminal-section">
+          <div className="vc-terminal-window">
+            <div className="vc-terminal-header">
+              <div className="vc-terminal-dots">
+                <span className="dot red" />
+                <span className="dot yellow" />
+                <span className="dot green" />
+              </div>
+              <span className="vc-terminal-title">vectiscode ~ game-project (anthropic/claude-3-7-sonnet)</span>
+              <span className="vc-terminal-badge">Studio: Connected</span>
+            </div>
+            <div className="vc-terminal-body">
+              <p className="line prompt"><span className="dim">&gt;</span> <span className="cmd">/connect</span></p>
+              <p className="line sys"><span className="green">✓</span> Connected to Roblox Studio MCP server (27 tools available)</p>
+              <p className="line prompt"><span className="dim">&gt;</span> Add a stamina sprint controller with client HUD and server replication</p>
+              <p className="line tool"><span className="cyan">[Tool]</span> inspect_instance {"{"} path: "StarterPlayer.StarterPlayerScripts" {"}"}</p>
+              <p className="line tool"><span className="cyan">[Tool]</span> multi_edit {"{"} path: "StarterPlayerScripts/SprintClient.client.luau" {"}"}</p>
+              <div className="line diff-box">
+                <p className="diff-header">--- StarterPlayerScripts/SprintClient.client.luau</p>
+                <p className="diff-header">+++ StarterPlayerScripts/SprintClient.client.luau</p>
+                <p className="diff-add">+ local UserInputService = game:GetService("UserInputService")</p>
+                <p className="diff-add">+ local SPRINT_SPEED = 24</p>
+                <p className="diff-add">+ local function onInputBegan(input, processed)</p>
+                <p className="diff-add">+   if not processed and input.KeyCode == Enum.KeyCode.LeftShift then</p>
+                <p className="diff-add">+     humanoid.WalkSpeed = SPRINT_SPEED</p>
+                <p className="diff-add">+   end</p>
+                <p className="diff-add">+ end</p>
+              </div>
+              <p className="line approval"><span className="yellow">? Permission Required:</span> Apply 2 script mutations to Studio? <span className="dim">[Y]es once / [A]llow / [N]o</span></p>
+              <p className="line prompt"><span className="dim">&gt;</span> y</p>
+              <p className="line success"><span className="green">✓</span> Applied cleanly to Studio. Checkpoint #04 saved for rollback.</p>
+            </div>
           </div>
         </section>
 
         <section className="vc-home-proof vc-shell">
           <div className="vc-home-proof-heading">
-            <p className="vc-kicker">How it works</p>
-            <h2>A local runtime around your model.</h2>
+            <p className="vc-kicker">Architecture</p>
+            <h2>Built for real Studio workflows.</h2>
           </div>
           <ol className="vc-home-proof-list">
-            <li><span>01</span><div><strong>Native Studio connection</strong><p>Communicates directly with Roblox Studio over stdio using the official MCP server.</p></div></li>
-            <li><span>02</span><div><strong>Your provider, your key</strong><p>Anthropic, OpenAI, Google Gemini, OpenRouter, or local Ollama. Keys stay in your OS keychain.</p></div></li>
-            <li><span>03</span><div><strong>Reviewable changes</strong><p>Review before apply. Diff inspection, per-patch rollback checkpoints, and Studio receipts for every turn.</p></div></li>
+            <li>
+              <span>01</span>
+              <div>
+                <strong>Native Studio connection</strong>
+                <p>Talks directly to Roblox Studio over stdio MCP. Reads scripts, game trees, and properties with zero external sync plugins.</p>
+              </div>
+            </li>
+            <li>
+              <span>02</span>
+              <div>
+                <strong>Your provider, your key</strong>
+                <p>Connect Claude, OpenAI, Google Gemini, Groq, DeepSeek, or local Ollama. Credentials stay encrypted in your OS keychain.</p>
+              </div>
+            </li>
+            <li>
+              <span>03</span>
+              <div>
+                <strong>Reviewable changes</strong>
+                <p>Review unified diffs before applying. Every turn creates a rollback checkpoint so you can undo changes instantly.</p>
+              </div>
+            </li>
           </ol>
+        </section>
+
+        <section className="vc-shell vc-commands-section">
+          <div className="vc-section-header">
+            <p className="vc-kicker">Interactive TUI</p>
+            <h2>Everything at your fingertips.</h2>
+            <p>Type <code>/</code> in the terminal to open the interactive command palette with live autocomplete.</p>
+          </div>
+          <div className="vc-commands-grid">
+            <div className="vc-cmd-card">
+              <code>/connect</code>
+              <p>Connect or inspect active Roblox Studio MCP server.</p>
+            </div>
+            <div className="vc-cmd-card">
+              <code>/models [provider]</code>
+              <p>List and switch models across Anthropic, OpenAI, Gemini, and Groq.</p>
+            </div>
+            <div className="vc-cmd-card">
+              <code>/playtest [start|stop]</code>
+              <p>Trigger and manage playtesting sessions inside Roblox Studio.</p>
+            </div>
+            <div className="vc-cmd-card">
+              <code>/verify</code>
+              <p>Capture Studio viewports and analyze live runtime console logs.</p>
+            </div>
+            <div className="vc-cmd-card">
+              <code>/undo &lt;id&gt;</code>
+              <p>Instant file-level rollback to any previous turn checkpoint.</p>
+            </div>
+            <div className="vc-cmd-card">
+              <code>/compact</code>
+              <p>Summarize older turns to reclaim context window headroom.</p>
+            </div>
+          </div>
         </section>
 
         <section className="vc-home-alpha vc-shell">
           <div>
             <p className="vc-kicker">Updates</p>
             <h2>Release notes only.</h2>
-            <p>No marketing spam. Version and compatibility updates when new features land.</p>
+            <p>No spam. Updates on new model integrations, MCP tool capabilities, and CLI releases.</p>
           </div>
           <WaitlistForm />
         </section>
@@ -172,7 +261,7 @@ export function DocsPage() {
         <aside><a href="#install">Install</a><a href="#provider">Provider</a><a href="#studio">Studio MCP</a><a href="#modes">Permissions</a><a href="#commands">Commands</a><a href="#privacy">Privacy</a></aside>
         <article className="vc-doc-content">
           <section id="install"><span>01</span><h2>Install</h2><p>Node 20 or newer (or Bun), then:</p><InstallCommand /><p>Run <code>vectiscode</code> for interactive TUI mode. Run <code>vectiscode doctor</code> to verify your environment.</p></section>
-          <section id="provider"><span>02</span><h2>Provider</h2><p>Run <code>vectiscode providers login anthropic</code> (or openai, google, openrouter). Keys are securely stored in your operating system keychain. Ollama requires no key.</p></section>
+          <section id="provider"><span>02</span><h2>Provider</h2><p>Run <code>vectiscode providers login anthropic</code> (or openai, google, groq, deepseek, openrouter). Keys are securely stored in your operating system keychain. Ollama requires no key.</p></section>
           <section id="studio"><span>03</span><h2>Studio MCP</h2><p>Enable MCP server in Roblox Studio (Assistant Settings &gt; Manage MCP Servers &gt; Enable Studio as MCP server), open your place, then run <code>/connect</code> in the TUI.</p></section>
           <section id="modes"><span>04</span><h2>Permissions</h2><p><code>plan</code> is read-only. <code>supervised</code> asks before writes. <code>auto</code> allows safe workspace writes. Destructive actions always require explicit approval.</p></section>
           <section id="commands"><span>05</span><h2>Commands</h2><p><code>vectiscode run "prompt"</code> executes headlessly. <code>/sessions</code> switches sessions. <code>/undo &lt;checkpoint&gt;</code> restores files. <code>/playtest</code> and <code>/verify</code> test in Studio.</p></section>
@@ -197,7 +286,7 @@ export function StatusPage() {
       <section className="vc-status-list">
         <div><span className="vc-status is-live"><i />Live</span><strong>Website</strong><p>{build?.sha ? `Build ${build.sha.slice(0, 8)} from ${build.channel ?? "main"}` : "Static docs and site active."}</p></div>
         <div><span className={`vc-status ${apiHealthy === false ? "is-queued" : "is-live"}`}><i />{apiHealthy === null ? "Checking" : apiHealthy ? "Healthy" : "Optional"}</span><strong>Account Service</strong><p>Optional label sync. Not in the execution path.</p></div>
-        <div><span className="vc-status is-live"><i />Alpha</span><strong>CLI Runtime</strong><p>{build?.cliVersion ? `Version ${build.cliVersion}` : "0.1.0-alpha.0"} on Node 20+ and Bun.</p></div>
+        <div><span className="vc-status is-live"><i />Alpha</span><strong>CLI Runtime</strong><p>{build?.cliVersion ? `Version ${build.cliVersion}` : "0.1.0-alpha.1"} on Node 20+ and Bun.</p></div>
         <div><span className="vc-status is-live"><i />Native</span><strong>Roblox Studio MCP</strong><p>Local stdio transport using official Studio launcher.</p></div>
       </section>
       <div className="vc-inline-cta"><div><span>Release notes</span><strong>Join the alpha updates list.</strong></div><WaitlistForm compact /></div>

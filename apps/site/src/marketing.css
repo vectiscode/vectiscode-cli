@@ -145,10 +145,10 @@
 .vc-hero h1 {
   max-width: 720px;
   margin-bottom: 20px;
-  font-family: "Source Serif 4", Georgia, serif;
-  font-size: 52px;
-  font-weight: 500;
-  line-height: 1;
+  font-family: "Geist", system-ui, -apple-system, sans-serif;
+  font-size: 48px;
+  font-weight: 600;
+  line-height: 1.1;
   letter-spacing: -0.03em;
 }
 
@@ -660,8 +660,9 @@
 
 .vc-doc-content h2 {
   margin: 8px 0 12px;
-  font-family: "Source Serif 4", Georgia, serif;
+  font-family: "Geist", system-ui, -apple-system, sans-serif;
   font-size: 22px;
+  font-weight: 600;
 }
 
 .vc-doc-content p {
@@ -753,15 +754,17 @@
 
 .vc-legal .prose h1 {
   margin: 0 0 16px;
-  font-family: "Source Serif 4", Georgia, serif;
+  font-family: "Geist", system-ui, -apple-system, sans-serif;
   font-size: 32px;
+  font-weight: 600;
   color: var(--vc-text);
 }
 
 .vc-legal .prose h2 {
   margin: 32px 0 12px;
-  font-family: "Source Serif 4", Georgia, serif;
+  font-family: "Geist", system-ui, -apple-system, sans-serif;
   font-size: 20px;
+  font-weight: 600;
   color: var(--vc-text);
 }
 
@@ -792,7 +795,7 @@
   display: grid;
   grid-template-columns: 1fr 380px;
   gap: 48px;
-  padding: 64px 0;
+  padding: 64px 0 40px;
   align-items: start;
 }
 
@@ -802,9 +805,9 @@
 
 .vc-home-hero h1 {
   margin-bottom: 16px;
-  font-size: 44px;
+  font-size: 40px;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.15;
   letter-spacing: -0.03em;
 }
 
@@ -814,7 +817,7 @@
 }
 
 .vc-home-lede {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   color: var(--vc-muted);
   font-size: 16px;
   line-height: 1.6;
@@ -843,6 +846,172 @@
   font-family: ui-monospace, monospace;
   font-size: 11px;
   line-height: 1.5;
+}
+
+.vc-terminal-section {
+  padding: 0 0 48px;
+}
+
+.vc-terminal-window {
+  border: 1px solid var(--vc-line-strong);
+  background: #0b0d12;
+  overflow: hidden;
+}
+
+.vc-terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #11141b;
+  border-bottom: 1px solid var(--vc-line);
+}
+
+.vc-terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.vc-terminal-dots .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.vc-terminal-dots .dot.red { background: #ff5f56; }
+.vc-terminal-dots .dot.yellow { background: #ffbd2e; }
+.vc-terminal-dots .dot.green { background: #27c93f; }
+
+.vc-terminal-title {
+  color: var(--vc-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.vc-terminal-badge {
+  color: #4ecb78;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.vc-terminal-body {
+  padding: 18px 20px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.vc-terminal-body .line {
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.vc-terminal-body .prompt {
+  color: #f2f1ec;
+  font-weight: 600;
+}
+
+.vc-terminal-body .cmd {
+  color: #38bdf8;
+}
+
+.vc-terminal-body .sys {
+  color: #9499a6;
+}
+
+.vc-terminal-body .tool {
+  color: #c084fc;
+}
+
+.vc-terminal-body .approval {
+  color: #fbbf24;
+  padding: 6px 10px;
+  background: rgba(251, 191, 36, 0.08);
+  border-left: 2px solid #fbbf24;
+  margin: 4px 0;
+}
+
+.vc-terminal-body .success {
+  color: #4ade80;
+}
+
+.vc-terminal-body .diff-box {
+  background: #06070a;
+  border: 1px solid var(--vc-line);
+  padding: 8px 12px;
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.vc-terminal-body .diff-header {
+  color: var(--vc-faint);
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.vc-terminal-body .diff-add {
+  color: #4ade80;
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.vc-commands-section {
+  padding: 48px 0;
+  border-bottom: 1px solid var(--vc-line);
+}
+
+.vc-section-header {
+  margin-bottom: 24px;
+}
+
+.vc-section-header h2 {
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+
+.vc-section-header p:not(.vc-kicker) {
+  color: var(--vc-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.vc-commands-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.vc-cmd-card {
+  padding: 16px;
+  border: 1px solid var(--vc-line);
+  background: var(--vc-surface);
+}
+
+.vc-cmd-card code {
+  display: inline-block;
+  color: var(--vc-accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.vc-cmd-card p {
+  color: var(--vc-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
 }
 
 .vc-home-proof {
