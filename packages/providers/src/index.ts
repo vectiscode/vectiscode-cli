@@ -1,7 +1,7 @@
 import type { CredentialVault, ProviderAdapter } from "@vectiscode/core";
 
 import { AnthropicAdapter } from "./anthropic.js";
-import { catalogSnapshotMeta, findCatalogModel, providerCatalog } from "./catalog.js";
+import { catalogSnapshotMeta, findCatalogModel, normalizeProviderId, providerCatalog } from "./catalog.js";
 import { GoogleAdapter } from "./google.js";
 import { OllamaAdapter } from "./ollama.js";
 import { OpenAiCompatibleAdapter } from "./openai-compatible.js";
@@ -17,7 +17,8 @@ export class ProviderRegistry {
   }
 
   get(id: string): ProviderAdapter {
-    const adapter = this.adapters.get(id.toLowerCase());
+    const normalized = normalizeProviderId(id);
+    const adapter = this.adapters.get(normalized);
     if (!adapter) throw new Error(`Unknown provider ${id}. Available: ${this.list().map((item) => item.id).join(", ")}`);
     return adapter;
   }
@@ -31,7 +32,7 @@ export function createProviderRegistry(vault: CredentialVault): ProviderRegistry
   return new ProviderRegistry([
     new OpenAiCompatibleAdapter(vault, {
       id: "openai",
-      label: "OpenAI",
+      label: "OpenAI / ChatGPT",
       credentialProvider: "openai",
       credentialRequired: true,
       baseUrl: () => process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
@@ -39,6 +40,22 @@ export function createProviderRegistry(vault: CredentialVault): ProviderRegistry
     }),
     new AnthropicAdapter(vault),
     new GoogleAdapter(vault),
+    new OpenAiCompatibleAdapter(vault, {
+      id: "groq",
+      label: "Groq (Meta Llama)",
+      credentialProvider: "groq",
+      credentialRequired: true,
+      baseUrl: () => "https://api.groq.com/openai/v1",
+      capabilities: { images: false, reasoning: true }
+    }),
+    new OpenAiCompatibleAdapter(vault, {
+      id: "deepseek",
+      label: "DeepSeek",
+      credentialProvider: "deepseek",
+      credentialRequired: true,
+      baseUrl: () => "https://api.deepseek.com/v1",
+      capabilities: { reasoning: true }
+    }),
     new OpenAiCompatibleAdapter(vault, {
       id: "openrouter",
       label: "OpenRouter",
@@ -90,4 +107,4 @@ export function catalogMeta() {
   return catalogSnapshotMeta();
 }
 
-export { AnthropicAdapter, GoogleAdapter, OllamaAdapter, OpenAiCompatibleAdapter, providerCatalog };
+export { AnthropicAdapter, GoogleAdapter, OllamaAdapter, OpenAiCompatibleAdapter, normalizeProviderId, providerCatalog };

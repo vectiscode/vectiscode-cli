@@ -90,11 +90,15 @@ export class OpenAiCompatibleAdapter implements ProviderAdapter {
   }
 
   async complete(request: ProviderTurnRequest): Promise<ProviderTurnResult> {
+    const targetModel = (this.id !== "openrouter" && request.model.startsWith(`${this.id}/`))
+      ? request.model.slice(this.id.length + 1)
+      : request.model;
+
     const response = await fetch(`${this.baseUrl()}/chat/completions`, {
       method: "POST",
       headers: await this.headers(),
       body: JSON.stringify({
-        model: request.model,
+        model: targetModel,
         messages: openAiMessages(request.messages),
         tools: request.tools.length ? request.tools.map((tool) => ({
           type: "function",

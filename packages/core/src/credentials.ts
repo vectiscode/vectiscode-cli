@@ -5,9 +5,15 @@ import { join } from "node:path";
 const SERVICE = "vectiscode";
 
 const environmentAliases: Record<string, string[]> = {
-  openai: ["OPENAI_API_KEY"],
-  anthropic: ["ANTHROPIC_API_KEY"],
+  openai: ["OPENAI_API_KEY", "CHATGPT_API_KEY", "CHATGPT_TOKEN"],
+  chatgpt: ["CHATGPT_API_KEY", "OPENAI_API_KEY", "CHATGPT_TOKEN"],
+  anthropic: ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"],
+  claude: ["CLAUDE_API_KEY", "ANTHROPIC_API_KEY"],
   google: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+  gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+  groq: ["GROQ_API_KEY"],
+  deepseek: ["DEEPSEEK_API_KEY"],
+  meta: ["META_API_KEY", "GROQ_API_KEY", "OLLAMA_API_KEY"],
   openrouter: ["OPENROUTER_API_KEY"],
   "openai-compatible": ["OPENAI_COMPATIBLE_API_KEY"]
 };

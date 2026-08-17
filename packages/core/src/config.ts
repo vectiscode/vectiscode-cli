@@ -123,6 +123,7 @@ export function configDirectory(): string {
 }
 
 export function dataDirectory(): string {
+  if (process.env.VECTISCODE_DATA_DIR) return process.env.VECTISCODE_DATA_DIR;
   if (process.platform === "win32") {
     return join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "VectisCode");
   }

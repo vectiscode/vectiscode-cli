@@ -7,8 +7,8 @@
   --vc-bg: #08090b;
   --vc-surface: #0e1014;
   --vc-text: #f2f1ec;
-  --vc-muted: #999da6;
-  --vc-faint: #656a73;
+  --vc-muted: #a3a7b0;
+  --vc-faint: #8a909c;
   --vc-line: #1e2126;
   --vc-line-strong: #2a2e35;
   --vc-accent: #ff6846;
@@ -187,6 +187,7 @@
 .vc-button.is-primary:hover {
   background: var(--vc-accent);
   border-color: var(--vc-accent);
+  color: #ffffff;
 }
 
 .vc-button.is-secondary {

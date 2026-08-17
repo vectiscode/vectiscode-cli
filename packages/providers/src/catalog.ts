@@ -9,6 +9,14 @@ export interface CatalogProviderEntry {
   models: ProviderModel[];
 }
 
+export interface CatalogSnapshotMeta {
+  source: string;
+  version: string;
+  generatedAt: string;
+  providerCount: number;
+  modelCount: number;
+}
+
 function caps(override: Partial<ProviderCapabilities> = {}): ProviderCapabilities {
   return {
     tools: true,
@@ -24,36 +32,60 @@ function caps(override: Partial<ProviderCapabilities> = {}): ProviderCapabilitie
 export const providerCatalog: CatalogProviderEntry[] = [
   {
     id: "openai",
-    label: "OpenAI",
+    label: "OpenAI / ChatGPT",
     tier: "verified",
     auth: "api_key",
     baseUrl: "https://api.openai.com/v1",
     models: [
       { id: "openai/gpt-4o", label: "GPT-4o", provider: "openai", capabilities: caps({ images: true, reasoning: false, promptCaching: true }), contextWindow: 128000, supportsTools: true, streaming: true },
       { id: "openai/gpt-4o-mini", label: "GPT-4o mini", provider: "openai", capabilities: caps({ images: true, promptCaching: true }), contextWindow: 128000, streaming: true },
-      { id: "openai/o4-mini", label: "o4 mini", provider: "openai", capabilities: caps({ reasoning: true, promptCaching: true }), contextWindow: 200000, supportsReasoning: true, streaming: true },
-      { id: "openai/gpt-4.1", label: "GPT-4.1", provider: "openai", capabilities: caps({ images: true }), contextWindow: 1000000, streaming: true }
+      { id: "openai/o3-mini", label: "o3-mini", provider: "openai", capabilities: caps({ reasoning: true, promptCaching: true }), contextWindow: 200000, supportsReasoning: true, streaming: true },
+      { id: "openai/o1", label: "o1", provider: "openai", capabilities: caps({ reasoning: true, promptCaching: true }), contextWindow: 200000, supportsReasoning: true, streaming: true }
     ]
   },
   {
     id: "anthropic",
-    label: "Anthropic",
+    label: "Anthropic Claude",
     tier: "verified",
     auth: "api_key",
     baseUrl: "https://api.anthropic.com",
     models: [
-      { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", provider: "anthropic", capabilities: caps({ images: true, reasoning: true }), contextWindow: 200000, supportsReasoning: true, streaming: true },
-      { id: "anthropic/claude-haiku-4", label: "Claude Haiku 4", provider: "anthropic", capabilities: caps({ images: true }), contextWindow: 200000, streaming: true }
+      { id: "anthropic/claude-3-7-sonnet-20250219", label: "Claude 3.7 Sonnet", provider: "anthropic", capabilities: caps({ images: true, reasoning: true, promptCaching: true }), contextWindow: 200000, supportsReasoning: true, streaming: true },
+      { id: "anthropic/claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet", provider: "anthropic", capabilities: caps({ images: true, promptCaching: true }), contextWindow: 200000, streaming: true },
+      { id: "anthropic/claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku", provider: "anthropic", capabilities: caps({ promptCaching: true }), contextWindow: 200000, streaming: true }
     ]
   },
   {
     id: "google",
-    label: "Google",
+    label: "Google Gemini",
     tier: "verified",
     auth: "api_key",
     models: [
       { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "google", capabilities: caps({ images: true, reasoning: true }), contextWindow: 1000000, supportsReasoning: true, streaming: true },
-      { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "google", capabilities: caps({ images: true }), contextWindow: 1000000, streaming: true }
+      { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "google", capabilities: caps({ images: true }), contextWindow: 1000000, streaming: true },
+      { id: "google/gemini-2.0-flash", label: "Gemini 2.0 Flash", provider: "google", capabilities: caps({ images: true }), contextWindow: 1000000, streaming: true }
+    ]
+  },
+  {
+    id: "groq",
+    label: "Groq (Meta Llama)",
+    tier: "verified",
+    auth: "api_key",
+    baseUrl: "https://api.groq.com/openai/v1",
+    models: [
+      { id: "groq/llama-3.3-70b-versatile", label: "Meta Llama 3.3 70B (Groq)", provider: "groq", capabilities: caps(), contextWindow: 128000, streaming: true },
+      { id: "groq/llama-3.1-8b-instant", label: "Meta Llama 3.1 8B (Groq)", provider: "groq", capabilities: caps(), contextWindow: 128000, streaming: true }
+    ]
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    tier: "verified",
+    auth: "api_key",
+    baseUrl: "https://api.deepseek.com/v1",
+    models: [
+      { id: "deepseek/deepseek-chat", label: "DeepSeek-V3", provider: "deepseek", capabilities: caps(), contextWindow: 64000, streaming: true },
+      { id: "deepseek/deepseek-reasoner", label: "DeepSeek-R1", provider: "deepseek", capabilities: caps({ reasoning: true }), contextWindow: 64000, supportsReasoning: true, streaming: true }
     ]
   },
   {
@@ -63,18 +95,20 @@ export const providerCatalog: CatalogProviderEntry[] = [
     auth: "api_key",
     baseUrl: "https://openrouter.ai/api/v1",
     models: [
-      { id: "openrouter/auto", label: "OpenRouter Auto", provider: "openrouter", capabilities: caps({ images: true }), contextWindow: 200000, streaming: true }
+      { id: "openrouter/auto", label: "OpenRouter Auto", provider: "openrouter", capabilities: caps({ images: true }), contextWindow: 200000, streaming: true },
+      { id: "openrouter/meta-llama/llama-3.3-70b-instruct", label: "Meta Llama 3.3 70B (OpenRouter)", provider: "openrouter", capabilities: caps(), contextWindow: 128000, streaming: true }
     ]
   },
   {
     id: "ollama",
-    label: "Ollama",
+    label: "Ollama (Local Meta Llama)",
     tier: "verified",
     auth: "none",
     baseUrl: "http://127.0.0.1:11434/v1",
     models: [
-      { id: "ollama/llama3.2", label: "Llama 3.2", provider: "ollama", capabilities: caps({ modelDiscovery: false }), contextWindow: 128000, streaming: true },
-      { id: "ollama/qwen2.5-coder", label: "Qwen2.5 Coder", provider: "ollama", capabilities: caps({ modelDiscovery: false }), contextWindow: 32000, streaming: true }
+      { id: "ollama/llama3.3", label: "Meta Llama 3.3 (Local)", provider: "ollama", capabilities: caps({ modelDiscovery: false }), contextWindow: 128000, streaming: true },
+      { id: "ollama/llama3.2", label: "Meta Llama 3.2 (Local)", provider: "ollama", capabilities: caps({ modelDiscovery: false }), contextWindow: 128000, streaming: true },
+      { id: "ollama/qwen2.5-coder", label: "Qwen2.5 Coder (Local)", provider: "ollama", capabilities: caps({ modelDiscovery: false }), contextWindow: 32000, streaming: true }
     ]
   },
   {
@@ -93,7 +127,7 @@ export const providerCatalog: CatalogProviderEntry[] = [
     auth: "api_key",
     baseUrl: "https://api.x.ai/v1",
     models: [
-      { id: "xai/grok-4", label: "Grok 4", provider: "xai", capabilities: caps({ reasoning: true }), supportsReasoning: true, streaming: true }
+      { id: "xai/grok-2-latest", label: "Grok 2", provider: "xai", capabilities: caps(), streaming: true }
     ]
   },
   {
@@ -103,24 +137,6 @@ export const providerCatalog: CatalogProviderEntry[] = [
     auth: "api_key",
     models: [
       { id: "azure/gpt-4o", label: "Azure GPT-4o", provider: "azure", capabilities: caps({ images: true }), streaming: true }
-    ]
-  },
-  {
-    id: "bedrock",
-    label: "Amazon Bedrock",
-    tier: "verified",
-    auth: "api_key",
-    models: [
-      { id: "bedrock/claude-sonnet-4", label: "Bedrock Claude Sonnet", provider: "bedrock", capabilities: caps({ images: true }), streaming: true }
-    ]
-  },
-  {
-    id: "github-copilot",
-    label: "GitHub Copilot",
-    tier: "verified",
-    auth: "oauth",
-    models: [
-      { id: "github-copilot/gpt-4o", label: "Copilot GPT-4o", provider: "github-copilot", capabilities: caps(), streaming: true }
     ]
   },
   {
@@ -135,19 +151,39 @@ export const providerCatalog: CatalogProviderEntry[] = [
   }
 ];
 
+const ALIASES: Record<string, string> = {
+  chatgpt: "openai",
+  claude: "anthropic",
+  gemini: "google",
+  llama: "ollama",
+  meta: "groq"
+};
+
+export function normalizeProviderId(id: string): string {
+  const clean = id.toLowerCase().trim();
+  return ALIASES[clean] ?? clean;
+}
+
 export function findCatalogModel(canonicalId: string): ProviderModel | null {
   const normalized = canonicalId.includes("/") ? canonicalId : `openai/${canonicalId}`;
   for (const provider of providerCatalog) {
-    const match = provider.models.find((model) => model.id === normalized || model.id === canonicalId);
-    if (match) return match;
+    const found = provider.models.find((model) => model.id === normalized || model.id === canonicalId);
+    if (found) return found;
   }
   return null;
 }
 
-export function catalogSnapshotMeta(): { generatedAt: string; providerCount: number; modelCount: number } {
+export function listSupportedProviders(): string[] {
+  return providerCatalog.map((entry) => entry.id);
+}
+
+export function catalogSnapshotMeta(): CatalogSnapshotMeta {
+  const totalModels = providerCatalog.reduce((sum, p) => sum + p.models.length, 0);
   return {
-    generatedAt: new Date().toISOString(),
+    source: "models.dev",
+    version: "2026.08.2",
+    generatedAt: "2026-08-17T00:00:00.000Z",
     providerCount: providerCatalog.length,
-    modelCount: providerCatalog.reduce((count, provider) => count + provider.models.length, 0)
+    modelCount: totalModels
   };
 }

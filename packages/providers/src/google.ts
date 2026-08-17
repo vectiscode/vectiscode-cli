@@ -43,7 +43,11 @@ export class GoogleAdapter implements ProviderAdapter {
   }
 
   async listModels(): Promise<Array<{ id: string; label: string }>> {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(await this.key())}`, { signal: AbortSignal.timeout(10_000) });
+    const key = await this.key();
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
+      headers: { "x-goog-api-key": key },
+      signal: AbortSignal.timeout(10_000)
+    });
     if (!response.ok) throw await responseError(this.label, response);
     const root = asRecord(await response.json());
     return asArray(root?.models).map(asRecord).filter((model): model is Record<string, unknown> => model !== null)
@@ -54,10 +58,14 @@ export class GoogleAdapter implements ProviderAdapter {
 
   async complete(request: ProviderTurnRequest): Promise<ProviderTurnResult> {
     const key = await this.key();
+    const modelId = request.model.replace(/^google\//, "");
     const system = request.messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key)}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:streamGenerateContent?alt=sse`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": key
+      },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: googleContents(request.messages),

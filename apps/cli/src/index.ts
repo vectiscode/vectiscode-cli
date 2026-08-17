@@ -25,20 +25,21 @@ import { runHeadless } from "./run.js";
 import { attachToServer, startServe } from "./serve.js";
 import { startTui } from "./tui.js";
 
-const VERSION = "0.1.0-alpha.0";
+const VERSION = "0.1.0-alpha.1";
 const program = new Command();
 
 async function runFirstSetup(): Promise<void> {
   const hasConfig = vectisConfigPaths().some((path) => existsSync(path)) || existsSync(configPath());
   if (hasConfig || !process.stdin.isTTY || !process.stdout.isTTY) return;
   output.line("\nWelcome to VectisCode. The CLI works without a Vectis account.\n");
-  output.line("Providers: openai, anthropic, google, openrouter, ollama, openai-compatible, xai, azure, lmstudio");
-  const providerId = (await promptLine("Provider", "openai")).toLowerCase();
+  output.line("Providers: openai (chatgpt), anthropic (claude), google (gemini), groq (meta llama), deepseek, openrouter, ollama, openai-compatible, xai, azure, lmstudio");
+  const providerInput = (await promptLine("Provider", "openai")).toLowerCase();
   const registry = createProviderRegistry(credentialVault);
-  const provider = registry.get(providerId);
+  const provider = registry.get(providerInput);
+  const providerId = provider.id;
   let validation: { ok: boolean; detail?: string } = await provider.validate().catch(() => ({ ok: false }));
   if (!validation.ok && !["ollama", "openai-compatible", "lmstudio"].includes(providerId)) {
-    const secret = await promptSecret(`${provider.label} API key`);
+    const secret = await promptSecret(`${provider.label} API key / token`);
     if (!secret) throw new Error("Provider setup cancelled because the API key was empty");
     await credentialVault.set(providerId, secret);
     validation = await provider.validate();
@@ -137,15 +138,16 @@ providers.command("list").description("List providers and readiness").action(asy
     output.line(`${provider.id.padEnd(20)} ${provider.label.padEnd(22)}${tier.padEnd(12)} ${validation.ok ? chalk.green("ready") : chalk.dim("not configured")}`);
   }
 });
-providers.command("login").argument("<provider>").description("Login to a provider and store credential in OS keychain").action(async (provider: string) => {
-  createProviderRegistry(credentialVault).get(provider);
-  const secret = await promptSecret(`${provider} API key`);
-  await credentialVault.set(provider, secret);
-  output.success(`Saved ${provider} credential in the OS keychain.`);
+providers.command("login").argument("<provider>").description("Login to a provider and store credential in OS keychain").action(async (providerInput: string) => {
+  const provider = createProviderRegistry(credentialVault).get(providerInput);
+  const secret = await promptSecret(`${provider.label} API key / token`);
+  await credentialVault.set(provider.id, secret);
+  output.success(`Saved ${provider.label} credential in the OS keychain.`);
 });
-providers.command("logout").argument("<provider>").description("Remove provider credential from OS keychain").action(async (provider: string) => {
-  await credentialVault.delete(provider);
-  output.success(`Removed ${provider} credential from the OS keychain.`);
+providers.command("logout").argument("<provider>").description("Remove provider credential from OS keychain").action(async (providerInput: string) => {
+  const provider = createProviderRegistry(credentialVault).get(providerInput);
+  await credentialVault.delete(provider.id);
+  output.success(`Removed ${provider.label} credential from the OS keychain.`);
 });
 providers.command("models").argument("[provider]").description("List models for a provider (compat alias)").action(async (providerId?: string) => {
   const config = loadConfig();

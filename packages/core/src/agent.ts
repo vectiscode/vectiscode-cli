@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { basename, resolve } from "node:path";
 
+import { loadConfig } from "./config.js";
+import { evaluatePermissions, SessionPermissionCache } from "./permissions.js";
 import { sessionStore, type SessionStore } from "./store.js";
 import type {
   AgentEvent,
@@ -25,9 +27,10 @@ export interface RunAgentOptions {
   sessionId?: string;
   signal?: AbortSignal;
   store?: SessionStore;
-  approve?: (call: ToolCall, definition: ToolDefinition) => Promise<boolean>;
+  approve?: (call: ToolCall, definition: ToolDefinition) => Promise<boolean | "approve-session">;
   onEvent?: (event: AgentEvent) => void;
   maxToolRounds?: number;
+  permissionCache?: SessionPermissionCache;
 }
 
 function requiresApproval(mode: PermissionMode, risk: ToolDefinition["risk"]): boolean {
@@ -39,6 +42,18 @@ function requiresApproval(mode: PermissionMode, risk: ToolDefinition["risk"]): b
 function isAllowed(mode: PermissionMode, risk: ToolDefinition["risk"]): boolean {
   if (mode === "plan") return risk === "read";
   return true;
+}
+
+function resolvePermission(
+  call: ToolCall,
+  definition: ToolDefinition,
+  mode: PermissionMode,
+  cache: SessionPermissionCache,
+  cwd: string
+): "allow" | "ask" | "deny" {
+  const config = loadConfig(cwd);
+  const rules = config.permissions ?? [];
+  return evaluatePermissions(call, definition, rules, mode, cache.toSet());
 }
 
 function retryable(error: unknown): boolean {
@@ -62,11 +77,27 @@ function sessionHistory(store: SessionStore, sessionId: string): AgentMessage[] 
     if (event.type === "turn.started" && typeof event.payload.prompt === "string") {
       history.push({ role: "user", content: event.payload.prompt });
     }
-    if (event.type === "turn.completed" && typeof event.payload.text === "string") {
+    if (event.type === "tool.requested" && typeof event.payload.call === "object" && event.payload.call !== null) {
+      const call = event.payload.call as ToolCall;
+      history.push({
+        role: "assistant",
+        content: `Calling ${call.name}`,
+        toolCalls: [call]
+      });
+    }
+    if (event.type === "tool.completed" && typeof event.payload.receipt === "object" && event.payload.receipt !== null) {
+      const receipt = event.payload.receipt as ToolReceipt;
+      history.push({
+        role: "tool",
+        toolCallId: receipt.toolCallId,
+        content: JSON.stringify(receipt)
+      });
+    }
+    if (event.type === "turn.completed" && typeof event.payload.text === "string" && event.payload.text.trim()) {
       history.push({ role: "assistant", content: event.payload.text });
     }
   }
-  return history.slice(-20);
+  return history.slice(-25);
 }
 
 export async function runAgent(options: RunAgentOptions): Promise<AgentRunResult> {
@@ -125,6 +156,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentRunResult
   let finalText = "";
   let reasoning = "";
   const callCounts = new Map<string, number>();
+  const permissionCache = options.permissionCache ?? new SessionPermissionCache();
 
   try {
     for (let round = 0; round < (options.maxToolRounds ?? 12); round += 1) {
@@ -172,15 +204,18 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentRunResult
         };
         emit("tool.requested", { call, risk: definition.risk });
 
-        if (!isAllowed(permissionMode, definition.risk)) {
+        const permission = resolvePermission(call, definition, permissionMode, permissionCache, cwd);
+        if (permission === "deny" || !isAllowed(permissionMode, definition.risk)) {
           messages.push({ role: "tool", toolCallId: call.id, content: `Denied by ${permissionMode} permission mode.` });
           continue;
         }
 
-        if (requiresApproval(permissionMode, definition.risk)) {
+        if (permission === "ask" || requiresApproval(permissionMode, definition.risk)) {
           emit("approval.requested", { call, risk: definition.risk });
           const approved = await options.approve?.(call, definition) ?? false;
-          if (!approved) {
+          if (approved === "approve-session") {
+            permissionCache.approveForSession(call);
+          } else if (!approved) {
             messages.push({ role: "tool", toolCallId: call.id, content: "Rejected by user or unavailable approval channel." });
             continue;
           }

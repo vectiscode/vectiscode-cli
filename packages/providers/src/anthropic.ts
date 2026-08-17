@@ -51,17 +51,26 @@ export class AnthropicAdapter implements ProviderAdapter {
 
   async complete(request: ProviderTurnRequest): Promise<ProviderTurnResult> {
     const system = request.messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
+    const modelId = request.model.replace(/^anthropic\//, "");
+    const supportsThinking = /claude-3-7|sonnet-3-7|claude-4/i.test(modelId);
+
+    const body: Record<string, unknown> = {
+      model: modelId,
+      max_tokens: supportsThinking ? 20_000 : 16_384,
+      stream: true,
+      system,
+      messages: anthropicMessages(request.messages),
+      tools: request.tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.inputSchema }))
+    };
+
+    if (supportsThinking) {
+      body.thinking = { type: "enabled", budget_tokens: 4096 };
+    }
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: await this.headers(),
-      body: JSON.stringify({
-        model: request.model,
-        max_tokens: 16_384,
-        stream: true,
-        system,
-        messages: anthropicMessages(request.messages),
-        tools: request.tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.inputSchema }))
-      }),
+      body: JSON.stringify(body),
       signal: request.signal
     });
     if (!response.ok) throw await responseError(this.label, response);

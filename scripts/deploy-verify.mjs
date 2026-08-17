@@ -25,10 +25,10 @@ const mode = args[0] || "both";
 const checkOnly = args.includes("--check");
 
 const STEPS = {
-  both: ["typecheck", "build", "audit:bundle", "audit:dependencies", "test", "test:visual", "deploy:api", "deploy:web", "deploy:health"],
+  both: ["typecheck", "check:emdash", "check:attribution", "build", "audit:bundle", "audit:dependencies", "test", "verify:connector", "audit:bridge", "test:visual", "deploy:api", "deploy:web", "deploy:health"],
   api: ["typecheck:api", "build:api", "audit:dependencies", "test", "deploy:api", "deploy:health"],
   web: ["typecheck:web", "build:web", "audit:bundle", "audit:dependencies", "test:visual", "deploy:web", "deploy:health"],
-  check: ["typecheck", "build", "audit:bundle", "audit:dependencies", "test", "test:visual"],
+  check: ["typecheck", "check:emdash", "check:attribution", "build", "audit:bundle", "audit:dependencies", "test", "verify:connector", "audit:bridge", "test:visual"],
 };
 
 const steps = checkOnly ? STEPS.check : (STEPS[mode] || STEPS.both);
@@ -93,6 +93,10 @@ function stepCommand(step) {
       return npmRunW("apps/api", "typecheck");
     case "typecheck:web":
       return npmRunW("apps/web", "typecheck");
+    case "check:emdash":
+      return npmCommand(["run", "check:emdash"]);
+    case "check:attribution":
+      return npmCommand(["run", "check:attribution"]);
     case "build":
       return npmCommand(["run", "build"]);
     case "build:api":
@@ -105,6 +109,10 @@ function stepCommand(step) {
       return npmCommand(["run", "audit:bundle"]);
     case "audit:dependencies":
       return npmCommand(["run", "audit:dependencies"]);
+    case "verify:connector":
+      return npmCommand(["run", "verify:connector"]);
+    case "audit:bridge":
+      return npmCommand(["run", "audit:bridge"]);
     case "test:visual":
       return npmCommand(["run", "test:visual"]);
     case "deploy:api":

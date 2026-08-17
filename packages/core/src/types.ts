@@ -112,6 +112,7 @@ export interface ToolReceipt {
   summary: string;
   output?: unknown;
   checkpointId?: string;
+  studioReceipt?: unknown;
   startedAt: string;
   completedAt: string;
 }

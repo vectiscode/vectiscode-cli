@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { Client } from "@modelcontextprotocol/client";
@@ -11,6 +11,32 @@ export interface StudioMcpStatus {
   command: string;
   toolCount: number;
   detail: string;
+}
+
+export interface PlaytestState {
+  active: boolean;
+  startedAt?: string;
+  studioId?: string;
+  error?: string;
+}
+
+export interface VisualQaResult {
+  ok: boolean;
+  summary: string;
+  evidence?: unknown[];
+}
+
+export interface StudioMutationReceipt {
+  studioId: string;
+  tool: string;
+  risk: ToolRisk;
+  reversible: boolean;
+  checkpointId?: string;
+  before: unknown;
+  after: unknown;
+  verified: boolean;
+  receivedAt: string;
+  error?: string;
 }
 
 function studioCommand(): StdioServerParameters {
@@ -39,7 +65,15 @@ export function classifyStudioTool(name: string): ToolRisk {
     "script_read",
     "script_search",
     "script_grep",
-    "instance_search",
+    "search_game_tree",
+    "inspect_instance",
+    "get_studio_state",
+    "get_console_output",
+    "screen_capture",
+    "http_get",
+    "skill",
+    "search_asset",
+    "wait_job_finished",
     "get_output",
     "get_selection",
     "docs_search",
@@ -47,8 +81,8 @@ export function classifyStudioTool(name: string): ToolRisk {
   ]);
   if (readTools.has(name) || /^(get|list|read|search|grep|inspect)_/.test(name)) return "read";
   if (name === "set_active_studio") return "external";
-  if (/delete|remove|destroy|execute|input|mouse|keyboard/i.test(name)) return "destructive";
-  if (/write|edit|create|insert|set|update|playtest/i.test(name)) return "write";
+  if (/delete|remove|destroy|execute|input|mouse|keyboard|navigation|character|subagent/i.test(name)) return "destructive";
+  if (/write|edit|multi_edit|create|insert|set|update|generate|upload|store|play/i.test(name)) return "write";
   return "unknown";
 }
 
@@ -56,6 +90,7 @@ export class StudioMcpClient {
   private client: Client | null = null;
   private transport: StdioClientTransport | null = null;
   private tools: ToolDefinition[] = [];
+  private activeStudioId = "active";
 
   async connect(): Promise<StudioMcpStatus> {
     if (this.client) return this.status();
@@ -100,7 +135,7 @@ export class StudioMcpClient {
       connected: Boolean(this.client),
       command,
       toolCount: this.tools.length,
-      detail: this.client ? "Connected through stdio" : "Not connected"
+      detail: this.client ? `Connected with ${this.tools.length} Studio tools` : "Not connected"
     };
   }
 
@@ -112,7 +147,12 @@ export class StudioMcpClient {
     if (!this.client) await this.connect();
     if (!this.client) throw new Error("Studio MCP did not initialize");
     const result = await this.client.callTool({ name, arguments: argumentsValue });
-    if (result.isError) throw new Error(`Studio tool ${name} failed: ${JSON.stringify(result.content)}`);
+    if (result.isError) {
+      const errorDetail = Array.isArray(result.content)
+        ? result.content.map((item) => ("text" in item ? item.text : JSON.stringify(item))).join("\n")
+        : JSON.stringify(result.content);
+      throw new Error(`Studio tool ${name} failed: ${errorDetail}`);
+    }
     return result.structuredContent ?? result.content;
   }
 
@@ -121,8 +161,141 @@ export class StudioMcpClient {
   }
 
   async selectStudio(studioId: string): Promise<unknown> {
+    this.activeStudioId = studioId;
     return this.callTool("set_active_studio", { studio_id: studioId });
+  }
+
+  private async captureBefore(name: string, argumentsValue: Record<string, unknown>): Promise<unknown> {
+    const target = argumentsValue.path ?? argumentsValue.script_id ?? argumentsValue.instance_id;
+    if (target && typeof target === "string" && /script|edit|write|property/i.test(name)) {
+      try {
+        return await this.callTool("script_read", { path: target });
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  async beginMutation(name: string, argumentsValue: Record<string, unknown>, studioId = this.activeStudioId): Promise<unknown> {
+    return this.captureBefore(name, argumentsValue);
+  }
+
+  async completeMutation(name: string, argumentsValue: Record<string, unknown>, before: unknown, studioId = this.activeStudioId): Promise<StudioMutationReceipt> {
+    let after: unknown = null;
+    let verified = false;
+    const isDestructive = /delete|destroy|execute|input|upload/i.test(name);
+    const reversible = !isDestructive && /write|edit|multi_edit|create|insert|set|update/i.test(name);
+    const target = argumentsValue.path ?? argumentsValue.script_id ?? argumentsValue.instance_id;
+
+    if (target && typeof target === "string" && /write|edit|multi_edit|set|update/i.test(name)) {
+      try {
+        after = await this.callTool("script_read", { path: target });
+        verified = Boolean(after !== null && after !== undefined);
+      } catch {
+        verified = false;
+        after = null;
+      }
+    } else {
+      verified = true;
+    }
+
+    return {
+      studioId,
+      tool: name,
+      risk: classifyStudioTool(name),
+      reversible,
+      before,
+      after,
+      verified,
+      receivedAt: new Date().toISOString()
+    };
+  }
+
+  async getStudioState(): Promise<Record<string, unknown>> {
+    const result = await this.callTool("get_studio_state", {});
+    return typeof result === "object" && result !== null ? (result as Record<string, unknown>) : { raw: result };
+  }
+
+  async startPlaytest(): Promise<PlaytestState> {
+    const hasStartStop = this.tools.some((t) => t.name === "start_stop_play");
+    const toolName = hasStartStop ? "start_stop_play" : "playtest_start";
+    const args = hasStartStop ? { play: true } : {};
+    const result = await this.callTool(toolName, args);
+    return {
+      active: true,
+      startedAt: new Date().toISOString(),
+      studioId: this.activeStudioId,
+      ...(typeof result === "object" && result !== null ? (result as Record<string, unknown>) : {})
+    };
+  }
+
+  async stopPlaytest(): Promise<PlaytestState> {
+    const hasStartStop = this.tools.some((t) => t.name === "start_stop_play");
+    const toolName = hasStartStop ? "start_stop_play" : "playtest_stop";
+    const args = hasStartStop ? { play: false } : {};
+    await this.callTool(toolName, args);
+    return { active: false, studioId: this.activeStudioId };
+  }
+
+  async captureConsole(): Promise<Array<Record<string, unknown>>> {
+    const hasConsoleOutput = this.tools.some((t) => t.name === "get_console_output");
+    const toolName = hasConsoleOutput ? "get_console_output" : "get_output";
+    const result = await this.callTool(toolName, {});
+    const rows = Array.isArray(result) ? result : (result as { output?: unknown; logs?: unknown } | undefined)?.output ?? (result as { logs?: unknown } | undefined)?.logs;
+    return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
+  }
+
+  async captureScreenshot(): Promise<unknown> {
+    const hasScreenCapture = this.tools.some((t) => t.name === "screen_capture");
+    const toolName = hasScreenCapture ? "screen_capture" : "screenshot";
+    return this.callTool(toolName, {});
+  }
+
+  async runVisualQa(): Promise<VisualQaResult> {
+    const state = await this.captureConsole();
+    const screenshot = await this.captureScreenshot().catch(() => null);
+    const errors = state.filter((row) => {
+      const severity = String(row.severity ?? row.level ?? row.type ?? row.message_type ?? "").toLowerCase();
+      return severity.includes("error") || severity.includes("critical");
+    });
+    const summary = errors.length
+      ? `Playtest console reported ${errors.length} error(s)`
+      : `Playtest console clean with ${state.length} log line(s)`;
+    return {
+      ok: errors.length === 0,
+      summary,
+      evidence: [{ console: state.slice(-20) }, screenshot ? { screenshot } : null].filter(Boolean)
+    };
   }
 }
 
 export const studioMcp = new StudioMcpClient();
+
+export function detectRobloxProject(cwd = process.cwd()): { enabled: boolean; signals: string[] } {
+  const signals: string[] = [];
+  const candidates = ["default.project.json", "aftman.toml", "selene.toml", "stylua.toml"];
+  for (const pattern of candidates) {
+    if (existsSync(join(cwd, pattern))) signals.push(pattern === "default.project.json" ? "Rojo project" : pattern.replace(/\.toml$/, "").replace(/^(\w)/, (first) => first.toUpperCase()));
+  }
+  const visit = (directory: string, depth: number): void => {
+    if (depth > 2) return;
+    try {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist" || entry.name === ".vectiscode") continue;
+        if (signals.includes("Luau source") && signals.includes("Studio place")) return;
+        if (entry.isDirectory()) {
+          visit(join(directory, entry.name), depth + 1);
+        } else if (entry.name.endsWith(".rbxl") || entry.name.endsWith(".rbxlx") || entry.name.endsWith(".rbxlx.bak")) {
+          signals.push("Studio place");
+        } else if (entry.name.endsWith(".lua") || entry.name.endsWith(".luau")) {
+          signals.push("Luau source");
+        }
+      }
+    } catch {
+      // Ignore permission or read errors in nested directories
+    }
+  };
+  visit(cwd, 0);
+  return { enabled: signals.length > 0, signals: [...new Set(signals)] };
+}
