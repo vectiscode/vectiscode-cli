@@ -66,15 +66,25 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
   const [running, setRunning] = useState(false);
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+  const [projectRoot, setProjectRoot] = useState<string>(initialProject ?? process.cwd());
   const [usage, setUsage] = useState({ input: 0, output: 0 });
   const [receiptCount, setReceiptCount] = useState(0);
   const [providerReady, setProviderReady] = useState(false);
-  const [queuedPrompt, setQueuedPrompt] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [columns, setColumns] = useState(process.stdout.columns || 80);
 
   const controller = useRef<AbortController | null>(null);
   const registry = useRef(createProviderRegistry(credentialVault));
   const executor = useRef(new RobloxToolExecutor(studioMcp));
+  const promptQueue = useRef<string[]>([]);
+
+  useEffect(() => {
+    const onResize = () => setColumns(process.stdout.columns || 80);
+    process.stdout.on("resize", onResize);
+    return () => {
+      process.stdout.off("resize", onResize);
+    };
+  }, []);
 
   useEffect(() => {
     void registry.current.get(providerId).validate().then((outcome) => setProviderReady(outcome.ok)).catch(() => setProviderReady(false));
@@ -198,6 +208,7 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
           setProviderId(selected.provider);
           setModel(selected.model);
           setMode(selected.permissionMode);
+          if (selected.projectPath) setProjectRoot(selected.projectPath);
           const events = sessionStore.readEvents(selected.id);
           const reconstructed: TranscriptItem[] = [];
           for (const ev of events) {
@@ -268,7 +279,7 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
         add("system", "Usage: /undo <checkpointId>");
       } else {
         try {
-          const res = rollbackCheckpoint(arg, initialProject ?? process.cwd());
+          const res = rollbackCheckpoint(arg, projectRoot);
           add("system", `Rollback successful: restored ${res.restored} to previous checkpoint.`);
         } catch (err) {
           add("system", `Rollback failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -316,8 +327,8 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
     if (!prompt) return;
 
     if (running) {
-      setQueuedPrompt(prompt);
-      add("system", `Queued follow-up: "${prompt}"`);
+      promptQueue.current.push(prompt);
+      add("system", `Queued follow-up (#${promptQueue.current.length}): "${prompt}"`);
       setInput("");
       return;
     }
@@ -377,7 +388,7 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
     try {
       const result = await runAgent({
         prompt,
-        cwd: initialProject ?? process.cwd(),
+        cwd: projectRoot,
         provider: registry.current.get(providerId),
         model,
         tools: executor.current,
@@ -397,15 +408,15 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
     } finally {
       setRunning(false);
       setApproval(null);
-      if (queuedPrompt) {
-        const next = queuedPrompt;
-        setQueuedPrompt(null);
-        setTimeout(() => void submit(next), 100);
+      if (promptQueue.current.length > 0) {
+        const nextPrompt = promptQueue.current.shift()!;
+        setTimeout(() => void submit(nextPrompt), 50);
       }
     }
   };
 
   const statusColor = studioMcp.status().connected ? "green" : "gray";
+  const isNarrow = columns < 100;
 
   return (
     <Box flexDirection="column" padding={1} width="100%">
@@ -413,7 +424,7 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
         <Text bold color="cyan">vectiscode</Text>
         <Text>{providerId}/{model} <Text color="yellow">[{mode}]</Text></Text>
         <Text color={statusColor}>Studio: {studioMcp.status().connected ? "Connected" : "Offline"}</Text>
-        <Text dimColor>Tokens: {usage.input + usage.output} | Receipts: {receiptCount}</Text>
+        {!isNarrow && <Text dimColor>Tokens: {usage.input + usage.output} | Receipts: {receiptCount}</Text>}
       </Box>
 
       <Box flexDirection="column" marginY={1} minHeight={10}>
@@ -438,18 +449,23 @@ export const TerminalApp: FC<{ initialProject?: string }> = ({ initialProject })
         <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} marginBottom={1}>
           <Box justifyContent="space-between" marginBottom={0}>
             <Text bold color="cyan">Commands ({filteredCommands.length})</Text>
-            <Text dimColor>↑/↓ navigate • Tab complete • Enter run</Text>
+            {!isNarrow && <Text dimColor>↑/↓ navigate • Tab complete • Enter run</Text>}
           </Box>
           {filteredCommands.slice(0, 7).map((cmd, index) => {
             const isSelected = index === selectedIndex;
+            const leftText = `${isSelected ? "▶ " : "  "}${cmd.name} ${cmd.args ? cmd.args : ""}`;
+            const maxDesc = Math.max(10, columns - leftText.length - 8);
+            const desc = cmd.description.length > maxDesc ? `${cmd.description.slice(0, maxDesc - 1)}…` : cmd.description;
             return (
               <Box key={cmd.name} justifyContent="space-between">
                 <Text color={isSelected ? "cyan" : "white"} bold={isSelected}>
                   {isSelected ? "▶ " : "  "}{cmd.name} {cmd.args ? chalk.dim(cmd.args) : ""}
                 </Text>
-                <Text dimColor={!isSelected} color={isSelected ? "yellow" : undefined}>
-                  {cmd.description}
-                </Text>
+                {columns >= 70 && (
+                  <Text dimColor={!isSelected} color={isSelected ? "yellow" : undefined}>
+                    {desc}
+                  </Text>
+                )}
               </Box>
             );
           })}

@@ -107,6 +107,43 @@ export class SessionStore {
     if (this.sqlite) return sqliteSessionStore.compactSession(sessionId);
     return { kept: this.readEvents(sessionId).length, summarized: 0 };
   }
+
+  importJsonlFile(filePath: string): { sessionId: string; count: number } {
+    if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+    const content = readFileSync(filePath, "utf8");
+    const lines = content.split(/\r?\n/).filter(Boolean);
+    if (!lines.length) throw new Error("JSONL file is empty");
+
+    const parsedEvents: AgentEvent[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      try {
+        const ev = JSON.parse(lines[i]) as AgentEvent;
+        if (!ev.sessionId || !ev.type) throw new Error("Missing sessionId or type in event");
+        parsedEvents.push(ev);
+      } catch (err) {
+        throw new Error(`Invalid JSONL at line ${i + 1}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    const sessionId = parsedEvents[0].sessionId;
+    const existing = this.getSession(sessionId);
+    if (!existing) {
+      this.saveSession({
+        version: 1,
+        id: sessionId,
+        projectName: "imported",
+        projectPath: process.cwd(),
+        provider: "imported",
+        model: "imported",
+        permissionMode: "supervised",
+        createdAt: parsedEvents[0].timestamp ?? new Date().toISOString(),
+        updatedAt: parsedEvents[parsedEvents.length - 1].timestamp ?? new Date().toISOString()
+      });
+    }
+    for (const ev of parsedEvents) {
+      this.appendEvent(ev);
+    }
+    return { sessionId, count: parsedEvents.length };
+  }
 }
 
 export const sessionStore = new SessionStore();

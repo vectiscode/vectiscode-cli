@@ -26,14 +26,31 @@ interface Hunk {
 }
 
 export function parseUnifiedDiff(diffText: string): Hunk[] {
-  const lines = diffText.split(/\r?\n/);
+  const rawLines = diffText.split(/\r?\n/);
+  while (rawLines.length > 0 && rawLines[rawLines.length - 1] === "") {
+    rawLines.pop();
+  }
   const hunks: Hunk[] = [];
   let currentHunk: Hunk | null = null;
 
-  for (const line of lines) {
+  const finalizeHunk = (hunk: Hunk): void => {
+    let actualDel = 0;
+    let actualAdd = 0;
+    for (const l of hunk.lines) {
+      if (l.startsWith("-")) actualDel++;
+      else if (l.startsWith("+")) actualAdd++;
+      else if (l.startsWith(" ")) { actualDel++; actualAdd++; }
+    }
+    if (hunk.oldCount !== actualDel || hunk.newCount !== actualAdd) {
+      throw new Error(`Malformed diff header at line ${hunk.oldStart}: expected -${hunk.oldCount} +${hunk.newCount}, parsed -${actualDel} +${actualAdd}`);
+    }
+    hunks.push(hunk);
+  };
+
+  for (const line of rawLines) {
     const hunkMatch = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
     if (hunkMatch) {
-      if (currentHunk) hunks.push(currentHunk);
+      if (currentHunk) finalizeHunk(currentHunk);
       currentHunk = {
         oldStart: parseInt(hunkMatch[1], 10),
         oldCount: hunkMatch[2] !== undefined ? parseInt(hunkMatch[2], 10) : 1,
@@ -44,12 +61,12 @@ export function parseUnifiedDiff(diffText: string): Hunk[] {
       continue;
     }
     if (currentHunk) {
-      if (line.startsWith("+") || line.startsWith("-") || line.startsWith(" ") || line === "") {
+      if (line.startsWith("+") || line.startsWith("-") || line.startsWith(" ")) {
         currentHunk.lines.push(line);
       }
     }
   }
-  if (currentHunk) hunks.push(currentHunk);
+  if (currentHunk) finalizeHunk(currentHunk);
   return hunks;
 }
 
@@ -70,8 +87,8 @@ export function applyUnifiedDiff(originalContent: string, diffText: string): str
 
   for (const hunk of hunks) {
     const targetIndex = hunk.oldStart - 1 + lineOffset;
-    let matchedIndex = -1;
     const searchRadii = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5];
+    const matchedIndices: number[] = [];
 
     for (const radius of searchRadii) {
       const testIndex = targetIndex + radius;
@@ -90,15 +107,20 @@ export function applyUnifiedDiff(originalContent: string, diffText: string): str
           oldLineIdx++;
         }
       }
-      if (matches) {
-        matchedIndex = testIndex;
-        break;
+      if (matches && !matchedIndices.includes(testIndex)) {
+        matchedIndices.push(testIndex);
       }
     }
 
-    if (matchedIndex === -1) {
+    if (matchedIndices.length === 0) {
       throw new Error(`Failed to apply diff hunk starting at line ${hunk.oldStart}: context mismatch`);
     }
+
+    if (matchedIndices.length > 1 && Math.abs(matchedIndices[0] - targetIndex) === Math.abs(matchedIndices[1] - targetIndex)) {
+      throw new Error(`Ambiguous diff hunk match at line ${hunk.oldStart}: multiple matching locations found`);
+    }
+
+    const matchedIndex = matchedIndices[0];
 
     const newHunkLines: string[] = [];
     let oldLinesConsumed = 0;
@@ -127,16 +149,37 @@ export function applyUnifiedDiff(originalContent: string, diffText: string): str
 }
 
 function matchSimpleGlob(filePath: string, pattern: string): boolean {
-  const normalizedPath = filePath.replace(/\\/g, "/");
-  const normalizedPattern = pattern.replace(/\\/g, "/");
-  const regexPattern = normalizedPattern
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*\*/g, "___DOUBLESTAR___")
-    .replace(/\*/g, "[^/]*")
-    .replace(/___DOUBLESTAR___/g, ".*")
-    .replace(/\?/g, "[^/]");
-  const regex = new RegExp(`^${regexPattern}$`, "i");
-  return regex.test(normalizedPath) || regex.test(normalizedPath.split("/").pop() ?? "");
+  const normalizedPath = filePath.replace(/\\/g, "/").replace(/^\.\//, "");
+  const normalizedPattern = pattern.replace(/\\/g, "/").replace(/^\.\//, "");
+
+  let regexStr = "";
+  let i = 0;
+  while (i < normalizedPattern.length) {
+    if (normalizedPattern.slice(i, i + 3) === "**/") {
+      regexStr += "(?:.*\\/)?";
+      i += 3;
+    } else if (normalizedPattern.slice(i, i + 2) === "**") {
+      regexStr += ".*";
+      i += 2;
+    } else if (normalizedPattern[i] === "*") {
+      regexStr += "[^\\/]*";
+      i += 1;
+    } else if (normalizedPattern[i] === "?") {
+      regexStr += "[^\\/]";
+      i += 1;
+    } else {
+      const char = normalizedPattern[i];
+      if (/[.+^${}()|[\]\\]/.test(char)) {
+        regexStr += "\\" + char;
+      } else {
+        regexStr += char;
+      }
+      i += 1;
+    }
+  }
+  const regex = new RegExp(`^${regexStr}$`, "i");
+  const basename = normalizedPath.split("/").pop() ?? "";
+  return regex.test(normalizedPath) || regex.test(basename);
 }
 
 function globFiles(root: string, baseDir: string, pattern: string, limit = 200): string[] {

@@ -153,9 +153,10 @@ describe("file tools", () => {
     expect(readFileSync(path, "utf8")).toBe("local x = 1\nlocal y = 2\n");
   });
 
-  it("globs files matching pattern across directories", async () => {
+  it("globs files matching pattern across directories including root", async () => {
     const cwd = root();
     mkdirSync(join(cwd, "src", "services"), { recursive: true });
+    writeFileSync(join(cwd, "root.luau"), "return {}", "utf8");
     writeFileSync(join(cwd, "src", "services", "RoundService.luau"), "return {}", "utf8");
     writeFileSync(join(cwd, "src", "services", "DataService.luau"), "return {}", "utf8");
     writeFileSync(join(cwd, "src", "config.json"), "{}", "utf8");
@@ -163,9 +164,21 @@ describe("file tools", () => {
     const outcome = await executor.execute(call("fs.glob", { pattern: "**/*.luau" }), ctx(cwd));
     expect(outcome.ok).toBe(true);
     const files = outcome.output as string[];
+    expect(files).toContain("root.luau");
     expect(files).toContain("src/services/RoundService.luau");
     expect(files).toContain("src/services/DataService.luau");
     expect(files).not.toContain("src/config.json");
+  });
+
+  it("rejects diff hunks with mismatched header counts", () => {
+    const malformed = [
+      "--- a/game.lua",
+      "+++ b/game.lua",
+      "@@ -1,5 +1,1 @@",
+      " local a = 1",
+      "-local b = 2"
+    ].join("\n");
+    expect(() => parseUnifiedDiff(malformed)).toThrow("Malformed diff header");
   });
 
   it("searches text files and honors query limit and abort signal", async () => {

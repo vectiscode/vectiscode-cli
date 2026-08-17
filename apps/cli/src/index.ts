@@ -210,14 +210,8 @@ session.command("export").argument("<id>", "session id or prefix").argument("[fi
   output.success(`Exported ${events.length} events to ${target}`);
 });
 session.command("import").argument("<file>", "JSONL file to import").description("Import session events (legacy JSONL)").action((file: string) => {
-  const content = readFileSync(file, "utf8");
-  const lines = content.split(/\r?\n/).filter(Boolean);
-  output.line(`Read ${lines.length} events from ${file}`);
-  output.line("Import is idempotent: existing sessions are not overwritten, legacy events are marked as imported");
-  for (const line of lines.slice(0, 3)) {
-    try { JSON.parse(line); } catch { throw new Error(`Invalid JSONL line: ${line.slice(0, 120)}`); }
-  }
-  output.success("Import validation passed. Full SQLite import lands with the SQLite migration");
+  const result = sessionStore.importJsonlFile(file);
+  output.success(`Imported ${result.count} event(s) for session ${result.sessionId.slice(0, 8)} successfully.`);
 });
 
 const mcp = program.command("mcp").description("Manage MCP servers");

@@ -60,6 +60,10 @@ function studioCommand(): StdioServerParameters {
 }
 
 export function classifyStudioTool(name: string): ToolRisk {
+  if (name === "set_active_studio") return "external";
+  if (/delete|remove|destroy|execute|input|mouse|keyboard|navigation|character|subagent/i.test(name)) return "destructive";
+  if (/write|edit|multi_edit|create|insert|set|update|generate|upload|store|play/i.test(name)) return "write";
+
   const readTools = new Set([
     "list_roblox_studios",
     "script_read",
@@ -79,10 +83,10 @@ export function classifyStudioTool(name: string): ToolRisk {
     "docs_search",
     "skills_list"
   ]);
-  if (readTools.has(name) || /^(get|list|read|search|grep|inspect)_/.test(name)) return "read";
-  if (name === "set_active_studio") return "external";
-  if (/delete|remove|destroy|execute|input|mouse|keyboard|navigation|character|subagent/i.test(name)) return "destructive";
-  if (/write|edit|multi_edit|create|insert|set|update|generate|upload|store|play/i.test(name)) return "write";
+  if (readTools.has(name)) return "read";
+  if (/^(get|list|read|search|grep|inspect)_[a-z0-9_]+$/i.test(name) && !/(delete|remove|destroy|write|edit|create|insert|set|update|exec)/i.test(name)) {
+    return "read";
+  }
   return "unknown";
 }
 
@@ -96,7 +100,7 @@ export class StudioMcpClient {
     if (this.client) return this.status();
     const command = studioCommand();
     const transport = new StdioClientTransport(command);
-    const client = new Client({ name: "vectiscode", version: "0.1.0-alpha.0" });
+    const client = new Client({ name: "vectiscode", version: "0.1.0-alpha.1" });
     try {
       await client.connect(transport);
       const listed = await client.listTools();

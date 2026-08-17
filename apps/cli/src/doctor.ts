@@ -45,11 +45,13 @@ export async function runDoctor(options: { migrateCredentials?: boolean } = {}):
     output.success(`Migrated and removed ${migrated.length} legacy credential file(s): ${migrated.join(", ") || "none"}`);
   }
 
+  let readyProviders = 0;
   output.line("\nProviders");
   for (const provider of registry.list()) {
     const catalogEntry = providerCatalog.find((entry) => entry.id === provider.id);
     const tier = catalogEntry?.tier ?? "unknown";
     const validation = await provider.validate().catch((error: unknown) => ({ ok: false, detail: error instanceof Error ? error.message : String(error) }));
+    if (validation.ok) readyProviders++;
     output.line(`  ${provider.id.padEnd(20)} ${tier.padEnd(10)} ${validation.ok ? "ready" : validation.detail ?? "not configured"}`);
   }
 
@@ -59,5 +61,10 @@ export async function runDoctor(options: { migrateCredentials?: boolean } = {}):
   output.line(`  launcher: ${status.command}`);
   output.line(`  tools: ${status.toolCount}`);
   output.line(`\nProject      ${process.cwd()}\n`);
+
+  if (readyProviders === 0) {
+    output.line("Note: No AI providers are configured yet. Run 'vectiscode providers login <provider>' to add an API key.\n");
+  }
+
   return keychain.available && legacyFiles.length === 0;
 }
