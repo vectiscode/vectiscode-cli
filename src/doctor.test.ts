@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { analyze } from "./checks.js";
 import { readClaude } from "./claude.js";
 import { limitDeltas, openWindows, readCodex } from "./codex.js";
+import { projectName } from "./model.js";
 
 const START = Date.UTC(2026, 9, 1, 10, 0);
 const at = (min: number) => new Date(START + min * 60_000).toISOString();
@@ -103,6 +104,8 @@ test("reads Claude Code logs: one request per API call, helpers, compactions, se
   assert.equal(r1.output, 250);
   assert.equal(r1.context, 60_005);
   assert.equal(r1.project, "demo");
+  assert.equal(projectName("/Users/me/game/.claude/worktrees/fix-ui", "x"), "game");
+  assert.equal(projectName("C:\\Users\\me\\game\\", "x"), "game");
   assert.ok(r1.cost > 0);
   assert.equal(requests.find((r) => r.id === "h1")!.agent, "scout");
   const s = sessions.get("s1")!;

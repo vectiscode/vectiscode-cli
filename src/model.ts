@@ -1,5 +1,3 @@
-import { basename } from "node:path";
-
 export type Source = "claude" | "codex";
 
 /** One model call, normalized across tools. Token counts are what the provider reported. */
@@ -58,7 +56,8 @@ export interface SourceData {
 
 export function projectName(cwd: string | undefined, fallback: string): string {
   if (!cwd) return fallback;
-  return basename(cwd.replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "").replace(/[\\/]+$/, "")) || fallback;
+  // Split on both separators: logs written on Windows can be read anywhere.
+  return cwd.replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "").split(/[\\/]/).filter(Boolean).pop() || fallback;
 }
 
 export function sessionFor(sessions: Map<string, Session>, source: Source, id: string, project: string, time: number): Session {
