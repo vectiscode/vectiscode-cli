@@ -53,8 +53,24 @@ It looks at the 7 days before the date (change that with `--days`) and everythin
 ## How the numbers work
 
 - **Claude Code** logs the tokens of every request. vectiscode weighs them with API list prices and calls the result *units* (API-equivalent dollars). When Claude Code's own cost records are in the logs, the prices are checked against them, so the units stay right when prices change. Plans are not billed this way; units are a common scale for comparing requests, chats and habits.
-- **Codex** logs how much of your 5-hour and weekly limits you have used after every turn. vectiscode credits each turn with the change, so its Codex numbers are real percentages, not estimates. If you switch between ChatGPT accounts, each account's window is counted separately.
+- **Codex** logs how much of your 5-hour and weekly limits you have used after every turn. vectiscode credits each turn with the change, so the per-chat percentages are real readings, not estimates. If you switch between ChatGPT accounts, each account's window is counted separately. The split into re-reading, new input and output is an estimate, from a test that measured how much each kind of token moves the limit (see below).
+- **Fresh chats** are simulated on your own chats: each step reads only what the work added since the last fresh start, plus a 5k handoff note, and each new chat pays what a first request usually costs in your logs. It doesn't count files the new chat has to read again, so treat it as an upper bound.
+- **Tool results** are measured from the cache: what a step writes is what the step before it added, its output plus the results of the tools it called.
 - **Setup sizes** are estimated from the characters in the logs, so they are approximate.
+- The findings overlap. A big file read in a long chat counts in both, so their shares don't add up to 100%.
+
+## What a Codex token costs
+
+Tested on one ChatGPT Plus account in October 2026 with gpt-6.1-sol: 154 turns in five blocks of identical turns, read against the 5-hour limit Codex logs after every turn.
+
+| Turn | Tokens | 5-hour limit per turn |
+|---|---|---|
+| A small step in a new chat | 22k read, 7k of them new | 0.21% |
+| A small step in a 170k chat | 170k read, 1.5k new | 0.26% |
+| Pasting 125k tokens of new text | 143k read, 125k new | 3.3% |
+| A 1,200-word answer | 22k read, 1,600 written | 0.38% |
+
+1% of the 5-hour limit is about 37k new tokens, 780k tokens from the cache, or 7k tokens of output. So a token from the cache counts about a twentieth of a new one and an output token about five times as much. Unlike Claude Code, Codex charges nothing extra to put a chat in its cache, so a new chat is cheap, and once a chat is long, every small step costs about as much as starting over.
 
 ## Requirements
 

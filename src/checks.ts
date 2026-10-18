@@ -1,4 +1,4 @@
-import { limitDeltas, severalAccounts } from "./codex.js";
+import { limitDeltas, severalAccounts, WEIGHTS } from "./codex.js";
 import type { LimitSample, Request, Session, SourceData } from "./model.js";
 import { costParts, readPrice } from "./prices.js";
 
@@ -28,6 +28,8 @@ export interface Report {
     turns: number;
     chats: number;
     severalAccounts: boolean;
+    /** Estimated from the token counts with WEIGHTS. */
+    split: { read: number; input: number; output: number };
     limits: { limit: string; windowMinutes: number; used: number; resetsAt: number; plan?: string }[];
     topChats: { project: string; start: number; points: number }[];
   };
@@ -72,6 +74,7 @@ export function analyze(claude: SourceData | undefined, codex: CodexData | undef
       turns: codex.requests.length,
       chats: codex.sessions.size,
       severalAccounts: severalAccounts(codex.limits, WEEK),
+      split: codexSplit(codex.requests),
       limits: [...latest.values()].map((s) => ({
         limit: s.limit,
         windowMinutes: s.windowMinutes,
@@ -314,7 +317,8 @@ function toolResults(claude: SourceData | undefined): Finding | null {
       const tokens = Math.max(0, written - prev.output);
       const cost = (tokens / written) * costParts(r).write + tokens * readPrice(r.model) * later[i]!;
       for (const name of prev.calls!) byTool.set(toolName(name), (byTool.get(toolName(name)) ?? 0) + cost / prev.calls!.length);
-      if (!biggest || tokens > biggest.tokens) biggest = { tool: [...new Set(prev.calls!.map(toolName))].join(", "), tokens, later: later[i]!, r };
+      const one = new Set(prev.calls).size === 1;
+      if (one && (!biggest || tokens > biggest.tokens)) biggest = { tool: toolName(prev.calls![0]!), tokens, later: later[i]!, r };
     }
   }
   const tools = [...byTool].sort((a, b) => b[1] - a[1]);
@@ -338,6 +342,14 @@ function toolResults(claude: SourceData | undefined): Finding | null {
 
 /** mcp__server__tool reads better as "tool (server)". */
 const toolName = (name: string) => name.replace(/^mcp__(.+?)__(.+)$/, "$2 ($1)");
+
+function codexSplit(reqs: Request[]) {
+  const read = sum(reqs, (r) => r.cacheRead * WEIGHTS.cacheRead);
+  const input = sum(reqs, (r) => (r.input + r.cacheWrite5m) * WEIGHTS.input);
+  const output = sum(reqs, (r) => r.output * WEIGHTS.output);
+  const total = read + input + output || 1;
+  return { read: read / total, input: input / total, output: output / total };
+}
 
 /** Points of the weekly Codex limit each turn used. */
 export function turnPoints(limits: LimitSample[], since: number): Map<string, number> {

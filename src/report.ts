@@ -26,6 +26,7 @@ export function render(report: Report, days: number | null): string {
   if (x) {
     const plan = x.limits.find((l) => l.plan)?.plan;
     out.push(row("Codex", `${x.turns.toLocaleString("en-US")} turns in ${x.chats} chats${plan ? ` · ${plan} plan` : ""}`));
+    out.push(row("", `re-reading the chat ${pct(x.split.read)} · new input ${pct(x.split.input)} · output ${pct(x.split.output)} ${dim("(estimated)")}`));
     const limits = [...x.limits].sort((a, b) => b.windowMinutes - a.windowMinutes || a.limit.localeCompare(b.limit));
     const text = limits.map((l) => `${l.limit === "codex" ? "" : `${l.limit} `}${windowName(l.windowMinutes)} ${l.used}%${l.used ? ` used, resets ${when(l.resetsAt)}` : ""}`);
     if (text.length) out.push(row("", `latest reading: ${text.join(" · ")}`));
@@ -59,14 +60,15 @@ function row(label: string, text: string): string {
 function wrap(text: string, indent: number, first = " ".repeat(indent)): string {
   const lines: string[] = [];
   let line = "";
-  for (const word of text.split(" ")) {
+  // Keep dates like "Oct 16" on one line.
+  for (const word of text.replace(/\b([A-Z][a-z]{2}) (\d)/g, "$1 $2").split(" ")) {
     if (line && visible(line).length + 1 + visible(word).length > WIDTH - indent) {
       lines.push(line);
       line = word;
     } else line = line ? `${line} ${word}` : word;
   }
   lines.push(line);
-  return lines.map((l, i) => (i ? " ".repeat(indent) : first) + l).join("\n");
+  return lines.map((l, i) => (i ? " ".repeat(indent) : first) + l.replaceAll(" ", " ")).join("\n");
 }
 
 const visible = (s: string) => s.replace(/\x1b\[\d+m/g, "");

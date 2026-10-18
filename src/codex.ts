@@ -8,6 +8,12 @@ const keep = (line: string) => NEEDLES.some((n) => line.includes(n));
 // started close together can be only 17 minutes apart, so the tolerance stays small.
 const JITTER = 5 * 60_000;
 
+/**
+ * How much a token counts toward Codex's limits, relative to a new (uncached) input token. Measured on a ChatGPT Plus
+ * account in October 2026 with gpt-6.1-sol: blocks of identical turns, timed against the 5-hour limit readings.
+ */
+export const WEIGHTS = { input: 1, cacheRead: 0.047, output: 5.1 };
+
 /** Reads Codex's logs: <root>/sessions/YYYY/MM/DD/rollout-*.jsonl. */
 export async function readCodex(root: string, since: number): Promise<SourceData & { limits: LimitSample[] }> {
   const requests: Request[] = [];
