@@ -16,7 +16,7 @@ vectiscode reads the session logs that Claude Code, Codex and OpenCode already k
 - **Codex limits.** Your latest 5-hour and weekly readings, and how much of a weekly limit each chat used, taken from the real percentages Codex logs after every turn.
 - **OpenCode.** Requests and chats across any model, the models you use most, context sizes and compactions. Units are shown when OpenCode records a cost or the model has a known API price.
 
-Each finding comes with a fix.
+Each finding comes with a fix, and the report opens with the three that matter most for you.
 
 Nothing leaves your computer. There is no account, no telemetry and no network call. Your session logs are only read, never changed. It keeps one small file, ~/.vectiscode/state.json, with the date of your last check, so the next run can show what changed.
 

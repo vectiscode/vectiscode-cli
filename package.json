@@ -1,6 +1,6 @@
 {
   "name": "vectiscode",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Find out where your Claude Code, Codex and OpenCode usage went, and what to change. Runs locally on your own logs.",
   "keywords": [
     "claude-code",

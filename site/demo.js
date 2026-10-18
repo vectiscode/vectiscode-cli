@@ -15,11 +15,16 @@
     const lines = [...panels[active].querySelectorAll('.terminal-line')];
     for (const [selector, phrase, offset] of [
       ['.savings-note', 'Starting a fresh chat at 150k', 45],
-      ['.fix-note', 'Fix: Every step', 14],
+      ['.fix-note', '1. Start a fresh chat', 14],
       ['.compare-note', 'units per request', 14]
     ]) {
       const line = lines.find(line => line.textContent.includes(phrase));
-      if (line) document.querySelector(selector).style.top = `${line.getBoundingClientRect().top - top - offset}px`;
+      const note = document.querySelector(selector);
+      const appropriate = selector === '.compare-note' ? active !== 0 : active === 0;
+      const scroll = panels[active].querySelector('.terminal-scroll').getBoundingClientRect();
+      const rect = line?.getBoundingClientRect();
+      note.hidden = !appropriate || !rect || rect.top < scroll.top || rect.bottom > scroll.bottom;
+      if (!note.hidden) note.style.top = `${rect.top - top - offset}px`;
     }
   }
   function finish(panel) {
@@ -93,6 +98,8 @@
     tab.addEventListener('keydown', e => arrowNavigation(e, tabs, i, selectTab));
   });
   document.querySelector('#replay').addEventListener('click', () => play(active));
+  panels.forEach(panel => panel.querySelector('.terminal-scroll').addEventListener('scroll', alignNotes, { passive: true }));
+  document.querySelector('[data-show-recheck]').addEventListener('click', () => selectTab(1));
   selectTab(0, false);
   if (!reducedMotion) {
     const demoObserver = new IntersectionObserver(entries => {
@@ -151,6 +158,24 @@
     control.addEventListener('keydown', e => arrowNavigation(e, controls, i, selectChart));
   });
   if (!reducedMotion) {
+    const penObserver = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        for (const path of entry.target.querySelectorAll('path')) {
+          path.animate([{ strokeDashoffset: path.getTotalLength() }, { strokeDashoffset: 0 }], { duration: 850, easing: 'ease-out', fill: 'forwards' });
+        }
+        entry.target.dataset.drawn = 'true';
+        penObserver.unobserve(entry.target);
+      }
+    }, { threshold: .35 });
+    document.querySelectorAll('.pen-drawing').forEach(svg => {
+      svg.querySelectorAll('path').forEach(path => {
+        const length = path.getTotalLength();
+        path.style.strokeDasharray = length;
+        path.style.strokeDashoffset = length;
+      });
+      penObserver.observe(svg);
+    });
     const path = document.querySelector('.real-line');
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) {
