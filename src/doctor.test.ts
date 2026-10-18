@@ -125,6 +125,8 @@ test("finds long chats, a cold cache rewrite, the setup and unused tools", async
   assert.match(ids["cache-breaks"]!.facts[0]!, /^1 time /);
   assert.match(ids["always-on"]!.facts.join(" "), /CLAUDE\.md and rules 1k/);
   assert.match(ids["always-on"]!.facts.join(" "), /Unused \(1k\)/);
+  assert.match(ids["tool-results"]!.facts[1]!, /^By tool: Read \d+%\.$/);
+  assert.match(ids["tool-results"]!.facts[2]!, /^Biggest single result: Read, 100k tokens in demo on .*, re-read by 1 later step\.$/);
   assert.equal(report.claude!.chats, 1);
 });
 

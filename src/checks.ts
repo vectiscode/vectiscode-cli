@@ -5,7 +5,7 @@ import { costParts, readPrice } from "./prices.js";
 export type Level = "high" | "medium" | "low" | "ok";
 
 export interface Finding {
-  id: "long-chats" | "always-on" | "cache-breaks" | "helpers";
+  id: "long-chats" | "always-on" | "tool-results" | "cache-breaks" | "helpers";
   level: Level;
   title: string;
   /** The share of usage the finding is about, 0 to 1. */
@@ -87,7 +87,7 @@ export function analyze(claude: SourceData | undefined, codex: CodexData | undef
     };
   }
 
-  const checks = [longChats(claude, codex, weekly), alwaysOn(claude, codex), cacheBreaks(claude), helpers(claude)];
+  const checks = [longChats(claude, codex, weekly), alwaysOn(claude, codex), toolResults(claude), cacheBreaks(claude), helpers(claude)];
   const order: Level[] = ["high", "medium", "low", "ok"];
   report.findings = checks
     .filter((f): f is Finding => f !== null)
@@ -285,6 +285,59 @@ function helpers(claude: SourceData | undefined): Finding | null {
     fix: "Each helper starts its own context with its own tools and instructions. Keep the types that save main-chat work, give them a cheaper model where the result holds up, and cap how many a single workflow can start.",
   };
 }
+
+/**
+ * What tool results cost: each one is written to the cache once and then re-read by every later step of its chat,
+ * until a compaction. A request's cache write is what was added since the step before: that step's output and the
+ * results of the tools it called.
+ */
+function toolResults(claude: SourceData | undefined): Finding | null {
+  const total = sum(claude?.requests ?? [], (r) => r.cost);
+  if (!claude || total <= 0) return null;
+  const threads = new Map<string, Request[]>();
+  for (const r of claude.requests) if (r.calls) threads.get(r.thread)?.push(r) ?? threads.set(r.thread, [r]);
+  const byTool = new Map<string, number>();
+  let biggest: { tool: string; tokens: number; later: number; r: Request } | undefined;
+  for (const reqs of threads.values()) {
+    const first = reqs[0]!;
+    const cuts = first.thread === first.session ? (claude.sessions.get(first.session)?.compactions ?? []).map((c) => c.time).sort((a, b) => a - b) : [];
+    // How many later steps of the same stretch (up to the next compaction) re-read what each step added.
+    const stretch = reqs.map((r) => cuts.filter((t) => t <= r.time).length);
+    const later = reqs.map(() => 0);
+    for (let i = reqs.length - 2; i >= 0; i--) if (stretch[i] === stretch[i + 1]) later[i] = later[i + 1]! + 1;
+    for (let i = 1; i < reqs.length; i++) {
+      const prev = reqs[i - 1]!;
+      const r = reqs[i]!;
+      const written = r.cacheWrite5m + r.cacheWrite1h;
+      // No tools: a message from you. A cold cache or a compaction: the write is the whole chat, not new results.
+      if (!prev.calls!.length || !written || r.cacheRead < prev.context / 2) continue;
+      const tokens = Math.max(0, written - prev.output);
+      const cost = (tokens / written) * costParts(r).write + tokens * readPrice(r.model) * later[i]!;
+      for (const name of prev.calls!) byTool.set(toolName(name), (byTool.get(toolName(name)) ?? 0) + cost / prev.calls!.length);
+      if (!biggest || tokens > biggest.tokens) biggest = { tool: [...new Set(prev.calls!.map(toolName))].join(", "), tokens, later: later[i]!, r };
+    }
+  }
+  const tools = [...byTool].sort((a, b) => b[1] - a[1]);
+  const share = sum(tools, ([, c]) => c) / total;
+  if (!tools.length) return null;
+  const level = grade(share, 0.3, 0.15, 0.05);
+  const facts = [
+    `Tool results took ${pct(share)} of your Claude usage: each one is written to the cache, then re-read by every later step of the chat.`,
+    `By tool: ${tools.slice(0, 5).map(([name, c]) => `${name} ${pct(c / total)}`).join(", ")}.`,
+  ];
+  if (biggest) facts.push(`Biggest single result: ${biggest.tool}, ${k(biggest.tokens)} tokens in ${biggest.r.project} on ${day(biggest.r.time)}, re-read by ${biggest.later} later ${plural(biggest.later, "step")}.`);
+  return {
+    id: "tool-results",
+    level,
+    title: level === "ok" ? "Tool results" : `Tool results: ${pct(share)} of your Claude usage went to what tools returned`,
+    share,
+    facts,
+    fix: "Read files in slices or search them instead of opening them whole, keep command output short (the tail, counts, errors only), take screenshots only when something has to be judged by eye, and let a helper read big files and report back a summary.",
+  };
+}
+
+/** mcp__server__tool reads better as "tool (server)". */
+const toolName = (name: string) => name.replace(/^mcp__(.+?)__(.+)$/, "$2 ($1)");
 
 /** Points of the weekly Codex limit each turn used. */
 export function turnPoints(limits: LimitSample[], since: number): Map<string, number> {

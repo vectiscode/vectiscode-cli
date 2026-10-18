@@ -25,6 +25,8 @@ export interface Request {
   context: number;
   /** API-equivalent USD. 0 when the model has no known price (Codex uses its real limit % instead). */
   cost: number;
+  /** The tools the model called in its answer (Claude Code only). */
+  calls?: string[];
 }
 
 export interface Session {

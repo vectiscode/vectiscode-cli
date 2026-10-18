@@ -41,15 +41,18 @@ export async function readClaude(root: string, since: number): Promise<SourceDat
 
       if (r.type === "assistant") {
         const m = r.message ?? {};
+        const calls: string[] = [];
         for (const block of Array.isArray(m.content) ? m.content : []) {
-          if (block?.type === "tool_use" && block.name) session.toolsCalled.add(block.name);
+          if (block?.type === "tool_use" && block.name) calls.push(block.name);
         }
+        for (const name of calls) session.toolsCalled.add(name);
         if (!usage || m.model === "<synthetic>") continue;
         const id = r.requestId ?? m.id;
         const known = requests.get(id);
         if (known) {
           // Claude Code writes one record per content block, all carrying the same usage.
           known.output = Math.max(known.output, usage.output_tokens ?? 0);
+          known.calls!.push(...calls);
           continue;
         }
         const write = usage.cache_creation_input_tokens ?? 0;
@@ -70,6 +73,7 @@ export async function readClaude(root: string, since: number): Promise<SourceDat
           output: usage.output_tokens ?? 0,
           context: 0,
           cost: 0,
+          calls,
         };
         req.context = req.input + req.cacheRead + write;
         requests.set(id, req);

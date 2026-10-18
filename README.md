@@ -8,8 +8,9 @@ npx vectiscode
 
 vectiscode reads the session logs that Claude Code and Codex already keep on your computer and tells you where your usage went:
 
-- **Long chats.** How much ran with more than 150k tokens of context, which chats grew biggest, and how often they were compacted. Every step in a chat re-reads the whole chat, so late steps cost far more than early ones.
+- **Long chats.** How much ran with more than 150k tokens of context, which chats grew biggest, how often they were compacted, and what starting fresh chats at 150k would really have saved once each new chat pays to load its setup again.
 - **Always-on context.** How big a new chat is before you type anything, what that setup is made of (tool definitions, system prompt, skills list, CLAUDE.md), and which tools were sent with every request but never called.
+- **Tool results.** What the files Claude read, the commands it ran and the screenshots it took cost you: each result is written to the cache once and re-read by every later step. By tool, with the biggest single result.
 - **Cache after breaks.** What it cost to come back to a big chat after its cache expired.
 - **Helpers and subagents.** How much went to each helper type and to workflows.
 - **Codex limits.** Your latest 5-hour and weekly readings, and how much of a weekly limit each chat used, taken from the real percentages Codex logs after every turn.
