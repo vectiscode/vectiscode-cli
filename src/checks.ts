@@ -8,6 +8,7 @@ export interface Finding {
   id: "long-chats" | "always-on" | "tool-results" | "cache-breaks" | "helpers";
   level: Level;
   title: string;
+  action: string;
   /** The share of usage the finding is about, 0 to 1. */
   share: number;
   facts: string[];
@@ -33,6 +34,13 @@ export interface Report {
     limits: { limit: string; windowMinutes: number; used: number; resetsAt: number; plan?: string }[];
     topChats: { project: string; start: number; points: number }[];
   };
+  opencode?: {
+    requests: number;
+    chats: number;
+    models: { name: string; share: number }[];
+    units: number;
+    split?: { read: number; write: number; output: number; input: number };
+  };
   findings: Finding[];
 }
 
@@ -42,7 +50,7 @@ const WEEK = 10_080;
 const LONG = 150_000;
 const VERY_LONG = 300_000;
 
-export function analyze(claude: SourceData | undefined, codex: CodexData | undefined, since: number, now = Date.now()): Report {
+export function analyze(claude: SourceData | undefined, codex: CodexData | undefined, since: number, now = Date.now(), opencode?: SourceData): Report {
   const report: Report = { since, findings: [] };
   const weekly = codex ? turnPoints(codex.limits, since) : new Map<string, number>();
 
@@ -72,7 +80,7 @@ export function analyze(claude: SourceData | undefined, codex: CodexData | undef
     for (const r of codex.requests) bySession.set(r.session, (bySession.get(r.session) ?? 0) + (weekly.get(r.id) ?? 0));
     report.codex = {
       turns: codex.requests.length,
-      chats: codex.sessions.size,
+      chats: new Set(codex.requests.map((r) => r.session)).size,
       severalAccounts: severalAccounts(codex.limits, WEEK),
       split: codexSplit(codex.requests),
       limits: [...latest.values()].map((s) => ({
@@ -90,7 +98,30 @@ export function analyze(claude: SourceData | undefined, codex: CodexData | undef
     };
   }
 
-  const checks = [longChats(claude, codex, weekly), alwaysOn(claude, codex), toolResults(claude), cacheBreaks(claude), helpers(claude)];
+  if (opencode?.requests.length) {
+    const reqs = opencode.requests;
+    const models = new Map<string, number>();
+    for (const r of reqs) models.set(r.model, (models.get(r.model) ?? 0) + 1);
+    const parts = reqs.map((r) => {
+      const p = costParts(r);
+      const total = p.read + p.write + p.output + p.input;
+      const scale = total ? r.cost / total : 0;
+      return { read: p.read * scale, write: p.write * scale, output: p.output * scale, input: p.input * scale };
+    });
+    const priced = sum(parts, (p) => p.read + p.write + p.output + p.input);
+    report.opencode = {
+      requests: reqs.length,
+      chats: new Set(reqs.map((r) => r.session)).size,
+      models: [...models].map(([name, n]) => ({ name, share: n / reqs.length })).sort((a, b) => b.share - a.share).slice(0, 4),
+      units: sum(reqs, (r) => r.cost),
+      split: priced ? {
+        read: sum(parts, (p) => p.read) / priced, write: sum(parts, (p) => p.write) / priced,
+        output: sum(parts, (p) => p.output) / priced, input: sum(parts, (p) => p.input) / priced,
+      } : undefined,
+    };
+  }
+
+  const checks = [longChats(claude, codex, weekly, opencode), alwaysOn(claude, codex, opencode), toolResults(claude), cacheBreaks(claude), helpers(claude)];
   const order: Level[] = ["high", "medium", "low", "ok"];
   report.findings = checks
     .filter((f): f is Finding => f !== null)
@@ -98,7 +129,7 @@ export function analyze(claude: SourceData | undefined, codex: CodexData | undef
   return report;
 }
 
-function longChats(claude: SourceData | undefined, codex: CodexData | undefined, weekly: Map<string, number>): Finding | null {
+function longChats(claude: SourceData | undefined, codex: CodexData | undefined, weekly: Map<string, number>, opencode?: SourceData): Finding | null {
   const facts: string[] = [];
   let share = 0;
   const claudeTotal = sum(claude?.requests ?? [], (r) => r.cost);
@@ -141,6 +172,13 @@ function longChats(claude: SourceData | undefined, codex: CodexData | undefined,
     }
   }
 
+  if (opencode?.requests.length) {
+    const input = sum(opencode.requests, (r) => r.context) || 1;
+    const over = sum(opencode.requests.filter((r) => r.context > LONG), (r) => r.context) / input;
+    const compactions = sum([...opencode.sessions.values()], (s) => s.compactions.filter((c) => c.time >= opencode.requests[0]!.time && c.time <= opencode.requests.at(-1)!.time).length);
+    facts.push(`OpenCode: ${pct(over)} of the tokens it read were in requests past ${k(LONG)} tokens of context, and chats were compacted ${compactions} ${plural(compactions, "time")}.`);
+  }
+
   if (!facts.length) return null;
   // Without Claude Code there is nothing to simulate, so Codex is graded on how much ran in long chats.
   const hasClaude = claudeTotal > 0;
@@ -158,6 +196,7 @@ function longChats(claude: SourceData | undefined, codex: CodexData | undefined,
   ];
   return {
     id: "long-chats",
+    action: hasClaude ? "Start a fresh chat from a short handoff note at about 150k" : codex?.requests.length ? "Start fresh Codex chats sooner" : "Start fresh OpenCode chats sooner",
     level,
     title: level === "ok" ? "Chat length" : title,
     share,
@@ -197,7 +236,7 @@ function freshChats(main: Request[], limit: number) {
 
 const HANDOFF = 5_000;
 
-function alwaysOn(claude: SourceData | undefined, codex: CodexData | undefined): Finding | null {
+function alwaysOn(claude: SourceData | undefined, codex: CodexData | undefined, opencode?: SourceData): Finding | null {
   const facts: string[] = [];
   let share = 0;
   const claudeTotal = sum(claude?.requests ?? [], (r) => r.cost);
@@ -241,10 +280,16 @@ function alwaysOn(claude: SourceData | undefined, codex: CodexData | undefined):
     if (firsts.size) facts.push(`A new Codex chat starts at about ${k(median([...firsts.values()]))} tokens.`);
   }
 
+  if (opencode?.requests.length) {
+    const firsts = firstContexts(opencode.requests.filter((r) => r.agent === "main"));
+    if (firsts.size) facts.push(`A new OpenCode chat starts at about ${k(median([...firsts.values()]))} tokens.`);
+  }
+
   if (!facts.length) return null;
   const level = grade(share, 0.2, 0.1, 0.03);
   return {
     id: "always-on",
+    action: "Turn off MCP servers and tools a project doesn't use",
     level,
     title: level === "ok" ? "Always-on context" : `Always-on context: ${pct(share)} of your Claude usage is re-sending the same setup`,
     share,
@@ -278,6 +323,7 @@ function cacheBreaks(claude: SourceData | undefined): Finding | null {
   if (big) facts.push(`Biggest: ${big.r.project} on ${day(big.r.time)}, ${k(big.written)} tokens rewritten after a ${duration(big.gap)} break.`);
   return {
     id: "cache-breaks",
+    action: "Before a long break, run /compact or continue in a fresh chat",
     level,
     title: level === "ok" ? "Cache after breaks" : `Coming back to big chats after a break cost ${pct(share)} of your Claude usage`,
     share,
@@ -295,6 +341,7 @@ function helpers(claude: SourceData | undefined): Finding | null {
   const level = grade(share, 0.4, 0.25, 0.15);
   return {
     id: "helpers",
+    action: "Give helpers a cheaper model and cap how many a workflow starts",
     level,
     title: level === "ok" ? "Helpers and subagents" : `Helpers and subagents: ${pct(share)} of your Claude usage`,
     share,
@@ -346,6 +393,7 @@ function toolResults(claude: SourceData | undefined): Finding | null {
   if (biggest) facts.push(`Biggest single result: ${biggest.tool}, ${k(biggest.tokens)} tokens in ${biggest.r.project} on ${day(biggest.r.time)}, re-read by ${biggest.later} later ${plural(biggest.later, "step")}.`);
   return {
     id: "tool-results",
+    action: "Keep tool results small: read files in slices, keep logs short",
     level,
     title: level === "ok" ? "Tool results" : `Tool results: ${pct(share)} of your Claude usage went to what tools returned`,
     share,

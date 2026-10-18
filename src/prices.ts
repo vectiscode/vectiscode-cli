@@ -59,7 +59,7 @@ export function calibrate(records: CostRecord[]): void {
 /** API-equivalent USD of each part of a request. */
 export function costParts(r: Request) {
   const p = priceOf(r.model);
-  if (!p || r.source !== "claude") return { input: 0, output: 0, read: 0, write: 0 };
+  if (!p || r.source === "codex") return { input: 0, output: 0, read: 0, write: 0 };
   const f = (scale.get(r.model) ?? 1) / 1e6;
   return {
     input: r.input * p[0] * f,

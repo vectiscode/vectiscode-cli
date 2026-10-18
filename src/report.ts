@@ -11,10 +11,11 @@ const LEVEL: Record<Finding["level"], (s: string) => string> = { high: paint("31
 const WIDTH = Math.min(process.stdout.columns || 100, 100);
 const PAD = 13;
 
-export function render(report: Report, days: number | null): string {
+export function render(report: Report, days: number | null, check?: { date?: number; rows: string[] }): string {
   const out: string[] = [];
   const range = days ? `last ${days} ${days === 1 ? "day" : "days"}` : `since ${day(report.since)}`;
   out.push("", `${bold("vectiscode")} ${dim(`usage doctor · ${range}`)}`, "");
+  if (check?.rows.length) out.push(bold(`SINCE YOUR LAST CHECK (${day(check.date!)})`), ...check.rows, "");
 
   const c = report.claude;
   if (c) {
@@ -33,11 +34,27 @@ export function render(report: Report, days: number | null): string {
     if (x.severalAccounts) out.push(row("", dim("You use more than one ChatGPT account. The reading above is from the one used last; each account's chats are counted against its own limit.")));
     if (x.topChats.length) out.push(row("", `biggest chats: ${x.topChats.map((s) => `${s.project} (${day(s.start)}) ${Math.round(s.points)}%`).join(", ")} of a weekly limit`));
   }
-  if (!c && !x) return `${out.join("\n")}No Claude Code or Codex logs found in that time.\n`;
-  if (c) out.push("", dim(wrap("Units are API-equivalent dollars, used to weigh tokens against each other. They are not your bill.", 0)));
+  const o = report.opencode;
+  if (o) {
+    out.push(row("OpenCode", `${o.requests.toLocaleString("en-US")} requests in ${o.chats} chats${o.units ? ` · ${units(o.units)} units` : ""}`));
+    out.push(row("", `models: ${o.models.map((m) => `${m.name} ${pct(m.share)}`).join(", ")}`));
+    if (o.split) out.push(row("", `re-reading the chat ${pct(o.split.read)} · writing to cache ${pct(o.split.write)} · output ${pct(o.split.output)} · new input ${pct(o.split.input)} ${dim("(models with known API prices)")}`));
+  }
+  if (!c && !x && !o) out.push("No Claude Code, Codex or OpenCode logs found in that time.");
 
   const problems = report.findings.filter((f) => f.level !== "ok");
   const fine = report.findings.filter((f) => f.level === "ok");
+  const actions = problems.slice(0, 3).map((f, i) => ({
+    text: `${i + 1}. ${f.action}`,
+    share: f.id === "long-chats" && c ? `saves about ${pct(f.share)}` : `${pct(f.share)} of ${f.id === "long-chats" && !c ? "Codex" : "Claude"} usage`,
+  }));
+  if (actions.length) {
+    out.push("", bold("WHAT TO DO FIRST"));
+    const left = Math.max(...actions.map((a) => a.text.length));
+    const right = Math.max(...actions.map((a) => a.share.length));
+    for (const a of actions) out.push(left + 2 + right <= WIDTH ? `${a.text.padEnd(left)}  ${a.share}` : `${wrap(a.text, 3, "")}\n   ${a.share}`);
+  }
+  if (c || o?.units) out.push("", dim(wrap("Units are API-equivalent dollars, used to weigh tokens against each other. They are not your bill.", 0)));
   if (problems.length) out.push("", bold("FINDINGS"));
   for (const f of problems) {
     out.push("", `${LEVEL[f.level](`● ${f.level.toUpperCase().padEnd(6)}`)} ${bold(f.title)}`);
@@ -46,8 +63,14 @@ export function render(report: Report, days: number | null): string {
   }
   if (fine.length) {
     out.push("", bold("LOOKS FINE"), "");
-    for (const f of fine) out.push(`${LEVEL.ok("✓")} ${f.title} ${dim(`(${pct(f.share)})`)}`);
+    for (const f of fine) {
+      out.push(`${LEVEL.ok("✓")} ${f.title} ${dim(`(${pct(f.share)})`)}`);
+      for (const fact of f.facts.filter((s) => s.startsWith("OpenCode:") || s.startsWith("A new OpenCode"))) out.push(wrap(fact, 9));
+    }
   }
+  if (check) out.push("", dim(check.date === undefined
+    ? "Saved today's date. Run vectiscode again after a few days of work to see what changed."
+    : "Next check: run it again in a few days to see what changed."));
   out.push("");
   return out.join("\n");
 }

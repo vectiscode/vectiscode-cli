@@ -20,6 +20,7 @@ export interface Period {
     compactionsPerChat: number;
   };
   codex?: { turns: number; hours: number; points: number; perHour: number; per100Turns: number; context: number };
+  opencode?: { context: number; past150k: number };
 }
 
 export interface Comparison {
@@ -28,7 +29,7 @@ export interface Comparison {
 }
 
 /** The same habits measured before and after a date: per active hour and per request, so periods of any length compare. */
-export function compare(claude: SourceData | undefined, codex: (SourceData & { limits: LimitSample[] }) | undefined, date: number, from: number, now = Date.now()): Comparison {
+export function compare(claude: SourceData | undefined, codex: (SourceData & { limits: LimitSample[] }) | undefined, date: number, from: number, now = Date.now(), opencode?: SourceData): Comparison {
   const weekly = codex ? turnPoints(codex.limits, from) : new Map<string, number>();
   const period = (a: number, b: number): Period => {
     const p: Period = { from: a, to: b };
@@ -63,13 +64,21 @@ export function compare(claude: SourceData | undefined, codex: (SourceData & { l
         context: sum(turns, (r) => r.context) / turns.length,
       };
     }
+    const open = opencode?.requests.filter(inside) ?? [];
+    if (open.length) {
+      const input = sum(open, (r) => r.context);
+      p.opencode = {
+        context: input / open.length,
+        past150k: sum(open.filter((r) => r.context > LONG), (r) => r.context) / (input || 1),
+      };
+    }
     return p;
   };
   return { before: period(from, date), after: period(date, now) };
 }
 
 /** Clock hours with at least one request. */
-function activeHours(reqs: Request[]): number {
+export function activeHours(reqs: Request[]): number {
   return new Set(reqs.map((r) => Math.floor(r.time / HOUR))).size;
 }
 
@@ -79,13 +88,8 @@ export function renderComparison({ before, after }: Comparison): string {
     return d >= 2 ? `${Math.round(d)} days` : `${Math.round(d * 24)} hours`;
   };
   const out = ["", `${bold("vectiscode")} ${dim(`compare · ${length(before)} before ${day(after.from)} vs ${length(after)} since`)}`, ""];
-  const head = (label: string) => out.push(`${bold(label.padEnd(28))}${dim("before".padStart(10))}${dim("after".padStart(10))}`);
-  // Lower is better for every row, so a fall is green.
-  const line = (label: string, b: number, a: number, show: (x: number) => string, change = true) => {
-    const delta = b > 0 ? a / b - 1 : 0;
-    const text = change && b > 0 && Math.abs(delta) >= 0.005 ? `${delta > 0 ? "+" : "−"}${Math.round(Math.abs(delta) * 100)}%` : "";
-    out.push(`  ${label.padEnd(26)}${show(b).padStart(10)}${show(a).padStart(10)}  ${delta < 0 ? green(text) : red(text)}`);
-  };
+  const head = (label: string) => out.push(`${bold(label.padEnd(30))}${dim("before".padStart(10))}${dim("after".padStart(10))}`);
+  const line = (...args: Parameters<typeof comparisonRow>) => out.push(comparisonRow(...args));
 
   const b = before.claude, a = after.claude;
   if (b && a) {
@@ -108,7 +112,43 @@ export function renderComparison({ before, after }: Comparison): string {
     out.push(dim(`  ${cb.hours} active hours before, ${ca.hours} after`), "");
   } else if (cb || ca) out.push(dim(`Codex: no turns ${cb ? "since" : "before"} ${day(after.from)} to compare with.`), "");
 
-  if (!b && !a && !cb && !ca) out.push("No Claude Code or Codex logs found around that date.", "");
+  const ob = before.opencode, oa = after.opencode;
+  if (ob && oa) {
+    head("OpenCode");
+    line("average context", ob.context, oa.context, k);
+    line("usage past 150k context", ob.past150k, oa.past150k, pct, false);
+    out.push("");
+  } else if (ob || oa) out.push(dim(`OpenCode: no requests ${ob ? "since" : "before"} ${day(after.from)} to compare with.`), "");
+
+  if (!b && !a && !cb && !ca && !ob && !oa) out.push("No Claude Code, Codex or OpenCode logs found around that date.", "");
   else if ((b && a && a.hours < 3) || (cb && ca && ca.hours < 3)) out.push(dim("Only a few active hours since the date, so these numbers will still move."), "");
   return out.join("\n");
+}
+
+/** Lower is better for every row, so a fall is green. */
+export function comparisonRow(label: string, b: number, a: number, show: (x: number) => string, change = true): string {
+  const delta = b > 0 ? a / b - 1 : 0;
+  const text = change && b > 0 && Math.abs(delta) >= 0.005 ? `${delta > 0 ? "+" : "−"}${Math.round(Math.abs(delta) * 100)}%` : "";
+  return `  ${label.padEnd(28)}${show(b).padStart(10)}${show(a).padStart(10)}  ${delta < 0 ? green(text) : red(text)}`;
+}
+
+export function recentChanges({ before, after }: Comparison): string[] {
+  const rows: string[] = [];
+  const b = before.claude, a = after.claude;
+  if (b && a) {
+    rows.push(comparisonRow("units per request", b.perRequest, a.perRequest, (x) => x.toFixed(3)));
+    rows.push(comparisonRow("average context", b.context, a.context, k));
+    rows.push(comparisonRow("usage past 150k context", b.past150k, a.past150k, pct, false));
+  }
+  const cb = before.codex, ca = after.codex;
+  if (cb && ca) {
+    rows.push(comparisonRow("Codex weekly % per 100 turns", cb.per100Turns, ca.per100Turns, (x) => x.toFixed(1)));
+    if (!b || !a) rows.push(comparisonRow("Codex average context", cb.context, ca.context, k));
+  }
+  const ob = before.opencode, oa = after.opencode;
+  if (ob && oa) {
+    rows.push(comparisonRow("OpenCode average context", ob.context, oa.context, k));
+    rows.push(comparisonRow("OpenCode usage past 150k", ob.past150k, oa.past150k, pct, false));
+  }
+  return rows;
 }

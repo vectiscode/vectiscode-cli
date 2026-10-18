@@ -6,10 +6,13 @@ import { parseArgs } from "node:util";
 import { analyze } from "./checks.js";
 import { readClaude } from "./claude.js";
 import { readCodex } from "./codex.js";
-import { compare, renderComparison } from "./compare.js";
+import { activeHours, compare, recentChanges, renderComparison } from "./compare.js";
+import { filterSource } from "./model.js";
+import { readOpenCode } from "./opencode.js";
 import { render } from "./report.js";
+import { lastCheck, saveCheck } from "./state.js";
 
-const HELP = `vectiscode: find out why your Claude Code and Codex limits drain, and what to change.
+const HELP = `vectiscode: find out where your Claude Code, Codex and OpenCode usage went, and what to change.
 
 Usage: npx vectiscode [options]
        npx vectiscode compare <date> [options]
@@ -21,10 +24,11 @@ Usage: npx vectiscode [options]
   --json              print the full report as JSON
   --claude-dir <dir>  Claude Code folder (default $CLAUDE_CONFIG_DIR or ~/.claude)
   --codex-dir <dir>   Codex folder (default $CODEX_HOME or ~/.codex)
+  --opencode-dir <dir> OpenCode folder (default $XDG_DATA_HOME/opencode or ~/.local/share/opencode)
   -v, --version       print the version
   -h, --help          print this help
 
-Everything runs on this computer. Your logs are read, never changed and never sent anywhere.`;
+Nothing is uploaded. Logs are only read; only the last-check date is saved.`;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -34,6 +38,7 @@ const { values, positionals } = parseArgs({
     json: { type: "boolean" },
     "claude-dir": { type: "string" },
     "codex-dir": { type: "string" },
+    "opencode-dir": { type: "string" },
     version: { type: "boolean", short: "v" },
     help: { type: "boolean", short: "h" },
   },
@@ -48,8 +53,8 @@ if (values.help) {
   const days = Number(values.days ?? 7);
   if (!Number.isFinite(date) || !(days > 0) || date > Date.now()) fail("Give the date to compare around, like: npx vectiscode compare 2026-10-01");
   const from = date - days * 86_400_000;
-  const [claude, codex] = await read(from);
-  const comparison = compare(claude, codex, date, from);
+  const [claude, codex, opencode] = await read(from);
+  const comparison = compare(claude, codex, date, from, Date.now(), opencode);
   console.log(values.json ? JSON.stringify(comparison, null, 2) : renderComparison(comparison));
 } else if (positionals.length) {
   fail(`Unknown command: ${positionals[0]}. Run npx vectiscode --help for the options.`);
@@ -57,17 +62,27 @@ if (values.help) {
   const days = values.since ? null : Number(values.days ?? 30);
   const since = values.since ? parseDate(values.since) : Date.now() - days! * 86_400_000;
   if (!Number.isFinite(since)) fail("Could not read the date or number of days. Try --since 2026-10-01 or --days 7.");
-  const [claude, codex] = await read(since);
-  const report = analyze(claude, codex, since);
-  console.log(values.json ? JSON.stringify(report, null, 2) : render(report, days));
+  const now = Date.now();
+  const previous = values.json ? undefined : lastCheck(now);
+  const from = previous === undefined ? since : Math.min(since, previous - 7 * 86_400_000);
+  const [claude, codex, opencode] = await read(from);
+  const report = analyze(filterSource(claude, since, now), filterSource(codex, since, now), since, now, filterSource(opencode, since, now));
+  // Runs within 12 hours of the last check keep it, so checking twice in a day doesn't reset the baseline.
+  const due = previous === undefined || now - previous >= 12 * 3_600_000;
+  const active = previous === undefined ? [] : [...claude.requests, ...codex.requests, ...opencode.requests].filter((r) => r.time >= previous && r.time < now);
+  const rows = previous !== undefined && due && activeHours(active) >= 3
+    ? recentChanges(compare(claude, codex, previous, previous - 7 * 86_400_000, now, opencode)) : [];
+  console.log(values.json ? JSON.stringify(report, null, 2) : render(report, days, { date: previous, rows }));
+  if (!values.json && due) saveCheck(now, JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
 }
 
 async function read(since: number) {
   const claudeDir = values["claude-dir"] ?? process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
   const codexDir = values["codex-dir"] ?? process.env.CODEX_HOME ?? join(homedir(), ".codex");
+  const opencodeDir = values["opencode-dir"] ?? join(process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"), "opencode");
   const status = process.stderr.isTTY && !values.json;
   if (status) process.stderr.write("Reading your logs...\r");
-  const data = await Promise.all([readClaude(claudeDir, since), readCodex(codexDir, since)]);
+  const data = await Promise.all([readClaude(claudeDir, since), readCodex(codexDir, since), readOpenCode(join(opencodeDir, "opencode.db"), since)]);
   if (status) process.stderr.write("                   \r");
   return data;
 }

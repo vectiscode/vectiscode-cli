@@ -1,10 +1,11 @@
 {
   "name": "vectiscode",
   "version": "0.2.0",
-  "description": "Find out why your Claude Code and Codex limits drain, and what to change. Runs locally on your own logs.",
+  "description": "Find out where your Claude Code, Codex and OpenCode usage went, and what to change. Runs locally on your own logs.",
   "keywords": [
     "claude-code",
     "codex",
+    "opencode",
     "usage",
     "rate-limits",
     "tokens",

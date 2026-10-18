@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
-export type Source = "claude" | "codex";
+export type Source = "claude" | "codex" | "opencode";
 
 /** One model call, normalized across tools. Token counts are what the provider reported. */
 export interface Request {
@@ -58,6 +58,20 @@ export interface LimitSample {
 export interface SourceData {
   requests: Request[];
   sessions: Map<string, Session>;
+}
+
+/** Keep the report window separate from the history read for comparisons. */
+export function filterSource<T extends SourceData>(data: T, from: number, to = Infinity): T {
+  const inside = (r: { time: number }) => r.time >= from && r.time < to;
+  const requests = data.requests.filter(inside);
+  const ids = new Set(requests.map((r) => r.session));
+  return {
+    ...data,
+    requests,
+    // Chats from the extra history would otherwise show up in setup and tool counts.
+    sessions: new Map([...data.sessions].filter(([id]) => ids.has(id))),
+    ...("limits" in data ? { limits: (data.limits as LimitSample[]).filter(inside) } : {}),
+  };
 }
 
 export function projectName(cwd: string | undefined, fallback: string): string {
