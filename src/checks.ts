@@ -104,10 +104,16 @@ function longChats(claude: SourceData | undefined, codex: CodexData | undefined,
     const main = claude.requests.filter((r) => r.agent === "main");
     const over = sum(main.filter((r) => r.context > LONG), (r) => r.cost) / claudeTotal;
     const overVery = sum(main.filter((r) => r.context > VERY_LONG), (r) => r.cost) / claudeTotal;
-    const beyond = sum(main, (r) => Math.max(0, r.context - LONG) * readPrice(r.model));
-    share = over;
+    const fresh = freshChats(main, LONG);
+    share = Math.max(0, fresh.saved) / claudeTotal;
     facts.push(`${pct(over)} of your Claude usage ran in chats past ${k(LONG)} tokens of context, ${pct(overVery)} past ${k(VERY_LONG)}.`);
-    facts.push(`Re-reading the part beyond ${k(LONG)} alone cost ${units(beyond)} units, ${pct(beyond / claudeTotal)} of everything.`);
+    if (fresh.restarts) {
+      facts.push(
+        fresh.saved > 0
+          ? `Starting a fresh chat at ${k(LONG)} would have saved about ${units(fresh.saved)} units, ${pct(share)} of your Claude usage, after paying about ${fresh.setup.toFixed(2)} units to set up each of ${fresh.restarts} more ${plural(fresh.restarts, "chat")}.`
+          : `Starting fresh chats at ${k(LONG)} would not have saved anything: setting up ${fresh.restarts} more ${plural(fresh.restarts, "chat")} at about ${fresh.setup.toFixed(2)} units each costs as much as the shorter chats save.`,
+      );
+    }
     const chats = chatStats(main, claude.sessions);
     const veryLong = chats.filter((c) => c.peak > VERY_LONG);
     if (veryLong.length) {
@@ -123,27 +129,56 @@ function longChats(claude: SourceData | undefined, codex: CodexData | undefined,
     const points = sum(codex.requests, (r) => weekly.get(r.id) ?? 0);
     if (points > 0) {
       const over = sum(codex.requests.filter((r) => r.context > LONG), (r) => weekly.get(r.id) ?? 0) / points;
-      share = Math.max(share, over);
       facts.push(`Codex: ${pct(over)} of the weekly limit you used went to turns past ${k(LONG)} tokens of context.`);
     } else {
       const input = sum(codex.requests, (r) => r.context) || 1;
       const over = sum(codex.requests.filter((r) => r.context > LONG), (r) => r.context) / input;
-      share = Math.max(share, over);
       facts.push(`Codex: ${pct(over)} of the tokens you sent were in turns past ${k(LONG)} tokens of context.`);
     }
   }
 
   if (!facts.length) return null;
-  const level = grade(share, 0.5, 0.25, 0.1);
+  const level = grade(share, 0.08, 0.04, 0.015);
   return {
     id: "long-chats",
     level,
-    title: level === "ok" ? "Chat length" : `Long chats: ${pct(share)} of your usage ran past ${k(LONG)} tokens of context`,
+    title: level === "ok" ? "Chat length" : `Long chats: fresh chats at ${k(LONG)} would have saved ${pct(share)} of your Claude usage`,
     share,
     facts,
-    fix: "Every step in a chat re-reads the whole chat, so late steps cost several times what early ones do. Start a fresh chat from a short handoff note once a chat passes about 150k, instead of letting it grow and compact.",
+    fix: "Every step re-reads the whole chat, so each 100k of chat makes every later step cost more. Start a fresh chat from a short handoff note once a chat passes about 150k. Much sooner doesn't pay, because each new chat has to load its setup again. Fresh chats also keep the detail that compaction throws away.",
   };
 }
+
+/**
+ * What starting a fresh chat at `limit` would have saved: each step reads less, minus the cost of setting up the
+ * extra chats (the median first request of a chat here), starting from a 5k handoff note.
+ */
+function freshChats(main: Request[], limit: number) {
+  const chats = new Map<string, Request[]>();
+  for (const r of main) chats.get(r.session)?.push(r) ?? chats.set(r.session, [r]);
+  const normal = [...chats.values()].filter((c) => c.length >= 3);
+  const setup = median(normal.map((c) => c[0]!.cost));
+  // Forks and resumed chats start big; a fresh chat starts from the usual setup.
+  const base = median(normal.map((c) => c[0]!.context));
+  let saved = 0;
+  let restarts = 0;
+  for (const reqs of chats.values()) {
+    let context = reqs[0]!.context;
+    for (let i = 0; i < reqs.length; i++) {
+      const r = reqs[i]!;
+      if (i) context += Math.max(0, r.context - reqs[i - 1]!.context);
+      if (context > limit) {
+        context = Math.min(reqs[0]!.context, base) + HANDOFF;
+        saved -= setup;
+        restarts++;
+      }
+      saved += (r.context - context) * readPrice(r.model);
+    }
+  }
+  return { saved, restarts, setup };
+}
+
+const HANDOFF = 5_000;
 
 function alwaysOn(claude: SourceData | undefined, codex: CodexData | undefined): Finding | null {
   const facts: string[] = [];

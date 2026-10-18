@@ -7,7 +7,7 @@ import { analyze } from "./checks.js";
 import { readClaude } from "./claude.js";
 import { limitDeltas, readCodex, severalAccounts } from "./codex.js";
 import { compare, renderComparison } from "./compare.js";
-import { projectName } from "./model.js";
+import { projectName, type Request } from "./model.js";
 
 const START = Date.UTC(2026, 9, 1, 10, 0);
 const at = (min: number) => new Date(START + min * 60_000).toISOString();
@@ -121,7 +121,7 @@ test("reads Claude Code logs: one request per API call, helpers, compactions, se
 test("finds long chats, a cold cache rewrite, the setup and unused tools", async () => {
   const report = analyze(await readClaude(claudeLogs(), 0), undefined, SINCE);
   const ids = Object.fromEntries(report.findings.map((f) => [f.id, f]));
-  assert.ok(ids["long-chats"]!.share > 0);
+  assert.match(ids["long-chats"]!.facts[1]!, /^Starting fresh chats at 150k would not have saved anything: setting up 1 more chat at /);
   assert.match(ids["cache-breaks"]!.facts[0]!, /^1 time /);
   assert.match(ids["always-on"]!.facts.join(" "), /CLAUDE\.md and rules 1k/);
   assert.match(ids["always-on"]!.facts.join(" "), /Unused \(1k\)/);
@@ -166,4 +166,15 @@ test("compares habits before and after a date", async () => {
   const text = renderComparison({ before, after });
   assert.match(text, /units per request/);
   assert.match(text, /Codex: no turns since/);
+});
+
+test("fresh chats pay off when a chat keeps growing", () => {
+  const req = (i: number, context: number): Request => ({
+    ...{ source: "claude", id: `q${i}`, session: "s", thread: "s", project: "p", agent: "main", model: "claude-opus-5-5" },
+    ...{ time: START + i * 60_000, input: 0, cacheRead: context, cacheWrite5m: 0, cacheWrite1h: 0, output: 0, context, cost: 0.02 },
+  });
+  const requests = Array.from({ length: 200 }, (_, i) => req(i, 20_000 + i * 2_000));
+  const long = analyze({ requests, sessions: new Map() }, undefined, SINCE).findings.find((f) => f.id === "long-chats")!;
+  assert.match(long.facts[1]!, /^Starting a fresh chat at 150k would have saved about .* to set up each of 3 more chats\.$/);
+  assert.ok(long.share > 0.1);
 });
