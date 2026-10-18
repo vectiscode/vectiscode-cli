@@ -27,7 +27,7 @@ export function render(report: Report, days: number | null): string {
     const limits = [...x.limits].sort((a, b) => b.windowMinutes - a.windowMinutes || a.limit.localeCompare(b.limit));
     const text = limits.map((l) => `${l.limit === "codex" ? "" : `${l.limit} `}${windowName(l.windowMinutes)} ${l.used}%${l.used ? ` used, resets ${when(l.resetsAt)}` : ""}`);
     if (text.length) out.push(row("", `latest reading: ${text.join(" · ")}`));
-    if (x.openWeekly > 1) out.push(row("", dim(`Readings came from ${x.openWeekly} different weekly windows, usually a sign of more than one ChatGPT account. The reading above is the latest one.`)));
+    if (x.severalAccounts) out.push(row("", dim("You use more than one ChatGPT account. The reading above is from the one used last; each account's chats are counted against its own limit.")));
     if (x.topChats.length) out.push(row("", `biggest chats: ${x.topChats.map((s) => `${s.project} (${day(s.start)}) ${Math.round(s.points)}%`).join(", ")} of a weekly limit`));
   }
   if (!c && !x) return `${out.join("\n")}No Claude Code or Codex logs found in that time.\n`;

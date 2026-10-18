@@ -1,4 +1,4 @@
-import { limitDeltas, openWindows } from "./codex.js";
+import { limitDeltas, severalAccounts } from "./codex.js";
 import type { LimitSample, Request, Session, SourceData } from "./model.js";
 import { costParts, readPrice } from "./prices.js";
 
@@ -27,8 +27,7 @@ export interface Report {
   codex?: {
     turns: number;
     chats: number;
-    /** More than one open weekly window means more than one ChatGPT account. */
-    openWeekly: number;
+    severalAccounts: boolean;
     limits: { limit: string; windowMinutes: number; used: number; resetsAt: number; plan?: string }[];
     topChats: { project: string; start: number; points: number }[];
   };
@@ -72,7 +71,7 @@ export function analyze(claude: SourceData | undefined, codex: CodexData | undef
     report.codex = {
       turns: codex.requests.length,
       chats: codex.sessions.size,
-      openWeekly: openWindows(codex.limits, WEEK, now),
+      severalAccounts: severalAccounts(codex.limits, WEEK),
       limits: [...latest.values()].map((s) => ({
         limit: s.limit,
         windowMinutes: s.windowMinutes,

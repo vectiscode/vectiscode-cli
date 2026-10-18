@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { analyze } from "./checks.js";
 import { readClaude } from "./claude.js";
-import { limitDeltas, openWindows, readCodex } from "./codex.js";
+import { limitDeltas, readCodex, severalAccounts } from "./codex.js";
 import { projectName } from "./model.js";
 
 const START = Date.UTC(2026, 9, 1, 10, 0);
@@ -86,10 +86,11 @@ function codexLogs(): string {
       { type: "turn_context", timestamp: at(0), payload: { model: "gpt-test" } },
       tokenCount(1, 1_000, 1_000, 10),
       tokenCount(2, 1_000, 1_000, 10), // same running total: not a new turn
-      tokenCount(3, 201_000, 200_000, 14, RESET + 1800), // same window, reset time reported 30 minutes off
+      tokenCount(3, 201_000, 200_000, 14, RESET + 60), // same window, reset time reported a minute off
       tokenCount(4, 202_000, 1_000, 12), // an older, lower reading from a parallel chat
       tokenCount(5, 203_000, 1_000, 15),
       tokenCount(6, 204_000, 1_000, 2, RESET + 3 * 86_400), // a second account's window
+      tokenCount(7, 205_000, 1_000, 15), // back on the first account
     ]),
   );
   return root;
@@ -128,12 +129,13 @@ test("finds long chats, a cold cache rewrite, the setup and unused tools", async
 
 test("reads Codex logs: skips repeated totals and counts each limit window from its peak", async () => {
   const codex = await readCodex(codexLogs(), 0);
-  assert.equal(codex.requests.length, 5);
+  assert.equal(codex.requests.length, 6);
   assert.equal(codex.requests[1]!.context, 200_000);
   assert.equal(codex.requests[1]!.cacheRead, 100_000);
   const deltas = [...limitDeltas(codex.limits, 10_080, SINCE).values()];
-  assert.deepEqual(deltas, [0, 0, 4, 0, 1, 2]);
-  assert.equal(openWindows(codex.limits, 10_080, SINCE), 2);
+  assert.deepEqual(deltas, [0, 0, 4, 0, 1, 2, 0]);
+  assert.equal(severalAccounts(codex.limits, 10_080), true);
+  assert.equal(severalAccounts(codex.limits.slice(0, 10), 10_080), false);
   const report = analyze(undefined, codex, SINCE, SINCE);
   assert.equal(report.codex!.topChats[0]!.points, 7);
   assert.match(report.findings.find((f) => f.id === "long-chats")!.facts[0]!, /^Codex: 57% /);

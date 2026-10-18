@@ -4,7 +4,9 @@ import { projectName, sessionFor, type LimitSample, type Request, type Session, 
 
 const NEEDLES = ['"session_meta"', '"turn_context"', '"token_count"'];
 const keep = (line: string) => NEEDLES.some((n) => line.includes(n));
-const JITTER = 3 * 3_600_000;
+// Readings of one window disagree on its reset time by about a minute. Windows of two accounts that
+// started close together can be only 17 minutes apart, so the tolerance stays small.
+const JITTER = 5 * 60_000;
 
 /** Reads Codex's logs: <root>/sessions/YYYY/MM/DD/rollout-*.jsonl. */
 export async function readCodex(root: string, since: number): Promise<SourceData & { limits: LimitSample[] }> {
@@ -87,8 +89,8 @@ export async function readCodex(root: string, since: number): Promise<SourceData
 
 /**
  * How many percentage points of a limit window each turn used. A window is known by its reset time: people who
- * switch between ChatGPT accounts have several running at once, and parallel chats report the same window with
- * reset times up to an hour apart, sometimes with an older, lower reading. So each window counts up from its peak.
+ * switch between ChatGPT accounts have several running at once, and parallel chats sometimes report an older,
+ * lower reading of the same window. So each window counts up from its peak.
  */
 export function limitDeltas(limits: LimitSample[], windowMinutes: number, since: number): Map<LimitSample, number> {
   const deltas = new Map<LimitSample, number>();
@@ -109,11 +111,14 @@ export function limitDeltas(limits: LimitSample[], windowMinutes: number, since:
   return deltas;
 }
 
-/** How many different windows of this length were still open at `now`. */
-export function openWindows(limits: LimitSample[], windowMinutes: number, now: number): number {
-  const open: number[] = [];
+/** Whether readings of two windows alternate in time, which only happens with more than one account. */
+export function severalAccounts(limits: LimitSample[], windowMinutes: number): boolean {
+  const spans: { resetsAt: number; first: number; last: number }[] = [];
   for (const s of limits) {
-    if (s.windowMinutes === windowMinutes && s.limit === "codex" && s.resetsAt > now && !open.some((r) => Math.abs(r - s.resetsAt) <= JITTER)) open.push(s.resetsAt);
+    if (s.windowMinutes !== windowMinutes || s.limit !== "codex") continue;
+    const w = spans.find((x) => Math.abs(x.resetsAt - s.resetsAt) <= JITTER);
+    if (w) w.last = s.time;
+    else spans.push({ resetsAt: s.resetsAt, first: s.time, last: s.time });
   }
-  return open.length;
+  return spans.some((a) => spans.some((b) => a !== b && a.first < b.first && b.first < a.last));
 }
