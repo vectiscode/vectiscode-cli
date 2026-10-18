@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>vectiscode · Where did your Claude Code and Codex limits go?</title>
+<meta name="description" content="A usage doctor for Claude Code and Codex. It reads the logs already on your computer, shows what drains your limits and tells you what to change. Runs locally, nothing is uploaded.">
+<link rel="canonical" href="https://vectiscode.com/">
+<meta name="theme-color" content="#f4eee3">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://vectiscode.com/">
+<meta property="og:site_name" content="vectiscode">
+<meta property="og:title" content="Where did your Claude Code and Codex limits go?">
+<meta property="og:description" content="Run npx vectiscode to see what drains your limits and what to change. Runs locally, nothing is uploaded.">
+<meta property="og:image" content="https://vectiscode.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="vectiscode: Where did your limits go? npx vectiscode">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script src="/copy.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+
+<nav>
+  <a class="brand" href="/"><svg viewBox="118 192 760 760" aria-hidden="true"><path fill="#ec7752" d="M143 210H335C398 210 438 248 458 322C492 450 532 680 566 830L518 935Z"/><path fill="#f6cdb3" d="M680 210H853L566 830C546 750 544 610 562 470C580 330 606 210 680 210Z"/><path fill="#eda283" d="M853 210C730 340 600 500 558 720L566 830Z"/></svg>vectiscode</a>
+  <div class="links"><a href="https://github.com/vectiscode/vectiscode-cli">GitHub</a><a href="https://www.npmjs.com/package/vectiscode">npm</a></div>
+</nav>
+
+<header class="hero">
+  <div>
+    <p class="kicker">Usage doctor for Claude Code &amp; Codex</p>
+    <h1>Where did your <i>limits</i> go?</h1>
+  </div>
+  <div class="side">
+    <p>vectiscode reads the logs Claude Code and Codex already keep on your computer, finds what drains your limits, and tells you what to change.</p>
+    <div class="cmd"><code>npx vectiscode</code><button type="button" data-copy="npx vectiscode">Copy</button></div>
+    <p class="trust">Runs locally and read-only. Nothing leaves your computer. Needs Node 22 or newer.</p>
+  </div>
+</header>
+
+<figure>
+  <div class="card">
+    <div class="rep">
+      <p class="rep-head"><b>vectiscode</b> <span class="dim">usage doctor · last 7 days</span></p>
+      <dl class="rep-sum">
+        <dt>Claude Code</dt>
+        <dd>1009 units over 10,552 requests in 44 chats</dd>
+        <dd>re-reading the chat 41% · writing to cache 30% · output 29% · new input &lt;1%</dd>
+        <dd>by project: web-app 72%, api 10%, docs-site 7%, mobile 3%</dd>
+        <dt>Codex</dt>
+        <dd>2,622 turns in 21 chats · plus plan</dd>
+        <dd>latest reading: weekly limit 43% used, resets Fri, Oct 23, 17:15 · 5-hour limit 0%</dd>
+        <dd>biggest chats: cli (Oct 17) 48%, web-app (Oct 14) 31%, web-app (Oct 16) 31% of a weekly limit</dd>
+      </dl>
+      <p class="dim">Units are API-equivalent dollars, used to weigh tokens against each other. They are not your bill.</p>
+      <p class="rep-sec"><b>FINDINGS</b></p>
+      <div class="f high">
+        <p class="f-t"><span class="lvl">● HIGH</span><b>Long chats: 67% of your usage ran past 150k tokens of context</b></p>
+        <p>67% of your Claude usage ran in chats past 150k tokens of context, 24% past 300k.</p>
+        <p>Re-reading the part beyond 150k alone cost 144 units, 14% of everything.</p>
+        <p>20 chats grew past 300k and were compacted 52 times.</p>
+        <p>web-app, Oct 16: 124 units, peaked at 268k, 20 compactions.</p>
+        <p>Codex: 35% of the weekly limit you used went to turns past 150k tokens of context.</p>
+        <p><b>Fix:</b> Every step in a chat re-reads the whole chat, so late steps cost several times what early ones do. Start a fresh chat from a short handoff note once a chat passes about 150k, instead of letting it grow and compact.</p>
+      </div>
+      <div class="f medium">
+        <p class="f-t"><span class="lvl">● MEDIUM</span><b>Always-on context: 17% of your Claude usage is re-sending the same setup</b></p>
+        <p>A new Claude Code chat starts at about 71k tokens (median of 40 chats), and most of that goes out again with every request.</p>
+        <p>Re-sending it cost 173 units, 17% of your Claude usage.</p>
+        <p>Never called in the 4 chats that logged their tools: SendFeedback (2k), Workflow (2k), ScheduleWakeup (2k), Agent (1k) and 5 more, about 8k per request.</p>
+        <p><b>Fix:</b> Turn off MCP servers and plugins a project doesn't use, deny unused built-in tools with permissions.deny in settings.json, and keep instruction files short.</p>
+      </div>
+      <div class="f low">
+        <p class="f-t"><span class="lvl">● LOW</span><b>Coming back to big chats after a break cost 3% of your Claude usage</b></p>
+        <p>31 times a chat was picked up after its cache had expired, so the whole chat was written to the cache again.</p>
+        <p>Biggest: mobile on Oct 13, 332k tokens rewritten after a 1-hour break.</p>
+        <p><b>Fix:</b> Before a long break, finish the step and continue in a fresh chat afterwards, or run /compact first so the rewrite is small.</p>
+      </div>
+      <p class="rep-sec"><b>LOOKS FINE</b></p>
+      <p class="ok"><span class="lvl">✓</span> Helpers and subagents <span class="dim">(15%)</span></p>
+    </div>
+  </div>
+  <figcaption><b>A real report.</b> Seven days of one developer's logs, project names changed.</figcaption>
+</figure>
+
+<section class="block">
+  <h2>Five checks, each with a <i>fix</i></h2>
+  <ol class="checks">
+    <li><div><b>Long chats</b><span>Every step re-reads the whole chat, so late steps in a long chat cost several times what early ones do.</span></div></li>
+    <li><div><b>Always-on context</b><span>Tool definitions, MCP servers, skills and CLAUDE.md go out with every request, used or not.</span></div></li>
+    <li><div><b>Cache after breaks</b><span>Come back after the cache has expired and the next step pays to write the whole chat again.</span></div></li>
+    <li><div><b>Helpers and subagents</b><span>Each one carries its own context, so see what share of your usage they take.</span></div></li>
+    <li><div><b>Codex limits</b><span>How much of your 5-hour and weekly limits each chat and project used.</span></div></li>
+  </ol>
+</section>
+
+<section class="block">
+  <h2>How the numbers work</h2>
+  <div class="how">
+    <p><b>Claude Code</b>Every request's tokens are weighed at API list prices, checked against Claude Code's own cost records, and shown as units: a fair scale for comparing chats and habits, not your bill.</p>
+    <p><b>Codex</b>Codex logs how much of your 5-hour and weekly limits you have used after every turn. vectiscode credits each turn with the change, so these are real percentages, not estimates.</p>
+  </div>
+</section>
+
+<section class="again">
+  <h2>Find out where <i>yours</i> went.</h2>
+  <div class="cmd"><code>npx vectiscode</code><button type="button" data-copy="npx vectiscode">Copy</button></div>
+</section>
+
+<footer>
+  <a class="brand" href="/"><svg viewBox="118 192 760 760" aria-hidden="true"><path fill="#ec7752" d="M143 210H335C398 210 438 248 458 322C492 450 532 680 566 830L518 935Z"/><path fill="#f6cdb3" d="M680 210H853L566 830C546 750 544 610 562 470C580 330 606 210 680 210Z"/><path fill="#eda283" d="M853 210C730 340 600 500 558 720L566 830Z"/></svg>vectiscode</a>
+  <span>MIT licensed</span>
+  <nav><a href="https://github.com/vectiscode/vectiscode-cli">GitHub</a><a href="https://www.npmjs.com/package/vectiscode">npm</a><a href="/privacy">Privacy</a></nav>
+</footer>
+
+</div>
+</body>
+</html>

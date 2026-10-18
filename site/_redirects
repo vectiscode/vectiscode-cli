@@ -1,0 +1,10 @@
+/docs        /  301
+/download    /  301
+/status      /  301
+/terms       /  301
+/login       /  301
+/signup      /  301
+/new         /  301
+/chat        /  301
+/docs/*      /  301
+/chat/*      /  301
