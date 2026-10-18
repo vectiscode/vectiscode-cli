@@ -1,6 +1,6 @@
 import { day, firstContexts, k, median, pct, sum, turnPoints, units } from "./checks.js";
 import type { LimitSample, Request, SourceData } from "./model.js";
-import { bold, dim, green, red } from "./report.js";
+import { bold, dim, green, gutter, pad, red, tableHeader, tableLabelWidth, wrap } from "./terminal.js";
 
 const LONG = 150_000;
 const HOUR = 3_600_000;
@@ -87,8 +87,8 @@ export function renderComparison({ before, after }: Comparison): string {
     const d = (p.to - p.from) / 86_400_000;
     return d >= 2 ? `${Math.round(d)} days` : `${Math.round(d * 24)} hours`;
   };
-  const out = ["", `${bold("vectiscode")} ${dim(`compare · ${length(before)} before ${day(after.from)} vs ${length(after)} since`)}`, ""];
-  const head = (label: string) => out.push(`${bold(label.padEnd(30))}${dim("before".padStart(10))}${dim("after".padStart(10))}`);
+  const out = ["", wrap(`${bold("vectiscode")} ${dim(`compare · ${length(before)} before ${day(after.from)} vs ${length(after)} since`)}`, 2, ""), ""];
+  const head = (label: string) => out.push(tableHeader(label.toUpperCase()));
   const line = (...args: Parameters<typeof comparisonRow>) => out.push(comparisonRow(...args));
 
   const b = before.claude, a = after.claude;
@@ -100,8 +100,8 @@ export function renderComparison({ before, after }: Comparison): string {
     line("usage past 150k context", b.past150k, a.past150k, pct, false);
     line("new chats start at", b.chatStart, a.chatStart, k);
     line("compactions per chat", b.compactionsPerChat, a.compactionsPerChat, (x) => x.toFixed(1), false);
-    out.push(dim(`  ${b.hours} active hours before, ${a.hours} after`), "");
-  } else if (b || a) out.push(dim(`Claude Code: no requests ${b ? "since" : "before"} ${day(after.from)} to compare with.`), "");
+    out.push(wrap(dim(`${b.hours} active hours before, ${a.hours} after`), 2), "");
+  } else if (b || a) out.push(wrap(dim(`Claude Code: no requests ${b ? "since" : "before"} ${day(after.from)} to compare with.`)), "");
 
   const cb = before.codex, ca = after.codex;
   if (cb && ca) {
@@ -109,8 +109,8 @@ export function renderComparison({ before, after }: Comparison): string {
     line("weekly % per active hour", cb.perHour, ca.perHour, (x) => x.toFixed(1));
     line("weekly % per 100 turns", cb.per100Turns, ca.per100Turns, (x) => x.toFixed(1));
     line("average context", cb.context, ca.context, k);
-    out.push(dim(`  ${cb.hours} active hours before, ${ca.hours} after`), "");
-  } else if (cb || ca) out.push(dim(`Codex: no turns ${cb ? "since" : "before"} ${day(after.from)} to compare with.`), "");
+    out.push(wrap(dim(`${cb.hours} active hours before, ${ca.hours} after`), 2), "");
+  } else if (cb || ca) out.push(wrap(dim(`Codex: no turns ${cb ? "since" : "before"} ${day(after.from)} to compare with.`)), "");
 
   const ob = before.opencode, oa = after.opencode;
   if (ob && oa) {
@@ -118,18 +118,20 @@ export function renderComparison({ before, after }: Comparison): string {
     line("average context", ob.context, oa.context, k);
     line("usage past 150k context", ob.past150k, oa.past150k, pct, false);
     out.push("");
-  } else if (ob || oa) out.push(dim(`OpenCode: no requests ${ob ? "since" : "before"} ${day(after.from)} to compare with.`), "");
+  } else if (ob || oa) out.push(wrap(dim(`OpenCode: no requests ${ob ? "since" : "before"} ${day(after.from)} to compare with.`)), "");
 
-  if (!b && !a && !cb && !ca && !ob && !oa) out.push("No Claude Code, Codex or OpenCode logs found around that date.", "");
-  else if ((b && a && a.hours < 3) || (cb && ca && ca.hours < 3)) out.push(dim("Only a few active hours since the date, so these numbers will still move."), "");
-  return out.join("\n");
+  if (!b && !a && !cb && !ca && !ob && !oa) out.push(wrap("No Claude Code, Codex or OpenCode logs found around that date."), "");
+  else if ((b && a && a.hours < 3) || (cb && ca && ca.hours < 3)) out.push(wrap(dim("Only a few active hours since the date, so these numbers will still move.")), "");
+  return gutter(out.join("\n"));
 }
 
 /** Lower is better for every row, so a fall is green. */
 export function comparisonRow(label: string, b: number, a: number, show: (x: number) => string, change = true): string {
   const delta = b > 0 ? a / b - 1 : 0;
-  const text = change && b > 0 && Math.abs(delta) >= 0.005 ? `${delta > 0 ? "+" : "−"}${Math.round(Math.abs(delta) * 100)}%` : "";
-  return `  ${label.padEnd(28)}${show(b).padStart(10)}${show(a).padStart(10)}  ${delta < 0 ? green(text) : red(text)}`;
+  const text = change && b > 0 && Math.abs(delta) >= 0.005 ? `${delta > 0 ? "▲" : "▼"} ${Math.round(Math.abs(delta) * 100)}%` : "";
+  const size = tableLabelWidth();
+  const lines = wrap(label, 0, "", size).split("\n");
+  return lines.map((line, i) => `  ${pad(line, size)}${i === lines.length - 1 ? `${pad(show(b), 10, true)}${pad(show(a), 10, true)}  ${delta < 0 ? green(text) : red(text)}` : ""}`).join("\n");
 }
 
 export function recentChanges({ before, after }: Comparison): string[] {

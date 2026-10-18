@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +10,7 @@ import { activeHours, compare, recentChanges, renderComparison } from "./compare
 import { filterSource, type Request, type SourceData } from "./model.js";
 import { readOpenCode } from "./opencode.js";
 import { render } from "./report.js";
+import { cells, visible } from "./terminal.js";
 
 const DAY = 86_400_000;
 const START = Date.UTC(2026, 9, 1);
@@ -33,23 +34,23 @@ test("prioritizes at most three actions, keeps their order and wraps narrow colu
       { id: "helpers", action: "Give helpers a cheaper model and cap how many a workflow starts", share: 0.3 },
     ].map((f) => ({ ...f, level: "high", title: "Finding", facts: [], fix: "Fix" } as Report["findings"][number])),
   };
-  const text = render(report, 7);
+  const text = visible(render(report, 7));
   const block = text.slice(text.indexOf("WHAT TO DO FIRST"), text.indexOf("Units are"));
-  assert.match(block, /1\. Start a fresh/);
-  assert.match(block, /2\. Keep tool/);
-  assert.match(block, /3\. Turn off/);
-  assert.doesNotMatch(block, /4\.|Give helpers/);
-  const lines = block.split("\n").filter((l) => /^\d\./.test(l));
-  assert.equal(lines[0]!.indexOf("saves about"), lines[1]!.indexOf("27%"));
-  assert.equal(lines[1]!.indexOf("27%"), lines[2]!.indexOf("17%"));
+  assert.match(block, /1  Start a fresh/);
+  assert.match(block, /2  Keep tool/);
+  assert.match(block, /3  Turn off/);
+  assert.doesNotMatch(block, /4  |Give helpers/);
+  const lines = block.split("\n").filter((l) => /│ [123]  /.test(l));
+  assert.equal(lines[0]!.indexOf("%"), lines[1]!.indexOf("%"));
+  assert.equal(lines[1]!.indexOf("%"), lines[2]!.indexOf("%"));
   const narrow = execFileSync(process.execPath, ["--input-type=module", "-e", `
     Object.defineProperty(process.stdout, "columns", { value: 48 });
     const { render } = await import(${JSON.stringify(new URL("./report.js", import.meta.url).href)});
     console.log(render(${JSON.stringify(report)}, 7));
   `], { encoding: "utf8" });
-  const narrowBlock = narrow.slice(narrow.indexOf("WHAT TO DO FIRST"), narrow.indexOf("Units are"));
-  assert.match(narrowBlock, /\n   saves about 13%/);
-  assert.ok(narrowBlock.split("\n").every((l) => l.length <= 48));
+  const narrowBlock = visible(narrow.slice(narrow.indexOf("WHAT TO DO FIRST"), narrow.indexOf("Units are")));
+  assert.match(narrowBlock, /up to 13%/);
+  assert.ok(narrowBlock.split("\n").every((l) => cells(l) <= 48));
 });
 
 test("findings carry the specified actions and Codex priorities use Codex usage", () => {
@@ -59,7 +60,8 @@ test("findings carry the specified actions and Codex priorities use Codex usage"
   assert.equal(claude.findings.find((f) => f.id === "always-on")!.action, "Turn off MCP servers and tools a project doesn't use");
   const codex = analyze(undefined, { requests: requests.map((r) => ({ ...r, source: "codex" })), sessions: new Map(), limits: [] }, START);
   assert.equal(codex.findings.find((f) => f.id === "long-chats")!.action, "Start fresh Codex chats sooner");
-  assert.match(render(codex, 7), /1\. Start fresh Codex chats sooner\s+100% of Codex usage/);
+  assert.match(visible(render(codex, 7)), /1  Start fresh Codex chats sooner\s+100%/);
+  assert.doesNotMatch(visible(render(codex, 7)), /of Claude usage/);
   const comparison = compare(undefined, { requests: requests.map((r) => ({ ...r, source: "codex" })), sessions: new Map(), limits: [] }, START + 60_000, START, START + DAY);
   assert.match(recentChanges(comparison).join("\n"), /Codex average context/);
 });
@@ -126,16 +128,16 @@ test("reads OpenCode main chats, helpers, compactions and prices with a WAL writ
   assert.equal(report.opencode!.chats, 2);
   assert.equal(report.opencode!.models[0]!.name, "gpt-test");
   assert.equal(report.opencode!.models[0]!.share, 0.6);
-  assert.match(render(report, 7), /OpenCode\s+5 requests in 2 chats/);
-  assert.match(render(report, 7), /models: gpt-test 60%, claude-sonnet-5-5 40%/);
-  assert.match(render(report, 7), /A new OpenCode chat starts at about 153k tokens/);
-  assert.match(render(report, 7), /compacted 1 time/);
+  assert.match(visible(render(report, 7)), /OPENCODE\s+5 requests · 2 chats/);
+  assert.match(visible(render(report, 7)), /models\s+gpt-test 60% · claude-sonnet-5-5 40%/);
+  assert.match(visible(render(report, 7)), /A new OpenCode chat starts at about 153k tokens/);
+  assert.match(visible(render(report, 7)), /compacted 1 time/);
   const claude: SourceData = { requests: [request(START), request(START + 60_000), request(START + 120_000)], sessions: new Map() };
   assert.deepEqual(analyze(claude, undefined, START).findings.map((f) => [f.id, f.level, f.share]), analyze(claude, undefined, START, START + DAY, data).findings.map((f) => [f.id, f.level, f.share]));
   const comparison = compare(undefined, undefined, START + 120_000, START, START + DAY, data);
   assert.equal(comparison.before.opencode!.context, 153_000);
   assert.equal(comparison.after.opencode!.past150k, 1);
-  assert.match(renderComparison(comparison), /OpenCode/);
+  assert.match(renderComparison(comparison), /OPENCODE/);
   assert.equal(recentChanges(comparison).length, 2);
   writer.exec("BEGIN IMMEDIATE");
   insert.run("pending", "main", "assistant", 7, START + 400_000, message("gpt-test", START + 400_000));
@@ -179,7 +181,7 @@ test("CLI remembers checks, compares enough history and leaves JSON and compare 
   const next = run(["--days", "3"]);
   assert.match(next, /SINCE YOUR LAST CHECK/);
   assert.match(next, /units per request/);
-  assert.match(next, /3 requests in 1 chats/);
+  assert.match(next, /3 requests · 1 chats/);
   assert.match(next, /Next check:/);
   assert.doesNotMatch(run(["--days", "3"]), /SINCE YOUR LAST CHECK/);
   seed();
@@ -194,8 +196,89 @@ test("CLI remembers checks, compares enough history and leaves JSON and compare 
   assert.match(run(["--days", "3"]), /Saved today's date/);
   const badHome = join(root, "file");
   writeFileSync(badHome, "read-only state location");
-  assert.match(run(["--days", "3"], badHome), /Claude Code/);
+  assert.match(run(["--days", "3"], badHome), /CLAUDE CODE/);
   const untouched = join(root, "untouched");
   run(["--json"], untouched);
   assert.equal(existsSync(untouched), false);
+});
+
+test("styled reports fit narrow columns, preserve facts and use fractional bars and limit colours", () => {
+  const report: Report = {
+    since: START,
+    claude: { units: 12, requests: 20, chats: 2, split: { read: 0.421, write: 0.301, output: 0.273, input: 0.005 }, agents: [], projects: [{ name: "web-app".repeat(20), share: 1 }] },
+    codex: {
+      turns: 30, chats: 3, severalAccounts: true, split: { read: 0.37, input: 0.39, output: 0.24 },
+      limits: [3, 51, 81].map((used, i) => ({ limit: i ? "extra-limit" : "codex", used, windowMinutes: i ? 300 : 10080, resetsAt: START + DAY, plan: "Plus" })),
+      topChats: [{ project: "api", start: START, points: 13 }],
+    },
+    opencode: { requests: 10, chats: 1, units: 1, models: [{ name: "test-model", share: 1 }], split: { read: 0.6, write: 0.2, output: 0.1, input: 0.1 } },
+    findings: [{ id: "long-chats", level: "high", title: "Fresh chats save up to 13%", action: "Start fresh from a short handoff note", share: 0.13, facts: ["67% ran past 150k tokens; 24% ran past 300k."], fix: "Start fresh at 150k. Much sooner doesn't pay for setup. Codex can start sooner." }],
+  };
+  const env = { ...process.env };
+  delete env.NO_COLOR;
+  delete env.FORCE_COLOR;
+  const run = (columns: number, color: boolean, noColor = false) => execFileSync(process.execPath, ["--input-type=module", "-e", `
+    const { render } = await import(${JSON.stringify(new URL("./report.js", import.meta.url).href)});
+    const { comparisonRow } = await import(${JSON.stringify(new URL("./compare.js", import.meta.url).href)});
+    console.log(render(${JSON.stringify(report)}, 30, { date: ${START}, rows: [comparisonRow("Codex weekly % per 100 turns", 10, 9.3, x => x.toFixed(1))] }));
+  `], { encoding: "utf8", env: { ...env, COLUMNS: String(columns), ...(color ? { FORCE_COLOR: "1" } : {}), ...(noColor ? { NO_COLOR: "1" } : {}) } });
+  for (const columns of [60, 80, 100, 140]) {
+    const colored = run(columns, true);
+    const plain = run(columns, false, true);
+    assert.match(colored, /\x1b\[38;5;208m/);
+    assert.match(colored, /\x1b\[35m/);
+    assert.match(colored, /\x1b\[33m/);
+    assert.match(colored, /\x1b\[31m/);
+    assert.match(colored, /\x1b\[7;31m HIGH /);
+    assert.match(plain, /\[HIGH\]/);
+    assert.doesNotMatch(plain, /\x1b/);
+    assert.match(plain, /[▏▎▍▌▋▊▉]/);
+    assert.match(plain, /░/);
+    assert.match(plain, /▼ 7%/);
+    for (const text of [colored, plain]) {
+      assert.ok(text.split("\n").every((line) => cells(line) <= Math.min(columns, 100)), `Overflow at ${columns} columns`);
+      const words = visible(text).replace(/\s+/g, " ");
+      assert.match(words, /67% ran past 150k tokens; 24% ran past 300k/);
+      assert.match(words, /each account's chats are counted against its own limit/);
+      assert.match(words, /resets/);
+    }
+  }
+  assert.doesNotMatch(run(80, false), /\x1b/);
+});
+
+test("comparison tables wrap labels and keep before, after and change columns aligned", () => {
+  const data = { requests: [request(START, 100_000), request(START + DAY, 80_000)], sessions: new Map() };
+  const comparison = compare(data, undefined, START + DAY, START, START + 2 * DAY);
+  for (const columns of [60, 80, 100]) {
+    const text = execFileSync(process.execPath, ["--input-type=module", "-e", `
+      const { renderComparison } = await import(${JSON.stringify(new URL("./compare.js", import.meta.url).href)});
+      console.log(renderComparison(${JSON.stringify(comparison)}));
+    `], { encoding: "utf8", env: { ...process.env, COLUMNS: String(columns), NO_COLOR: "1", FORCE_COLOR: "0" } });
+    assert.ok(text.split("\n").every((line) => cells(line) <= columns));
+    assert.match(text, /CLAUDE CODE\s+before\s+after/);
+    assert.match(text, /▼ 20%/);
+    const header = text.split("\n").find((line) => line.includes("before") && line.includes("after") && line.includes("CLAUDE"))!;
+    const row = text.split("\n").find((line) => line.includes("units per request"))!;
+    assert.equal(header.indexOf("before") + "before".length, row.indexOf("0.020") + "0.020".length);
+    assert.equal(header.indexOf("after") + "after".length, row.indexOf("0.016") + "0.016".length);
+  }
+});
+
+test("CLI clears the entire reading status and keeps forced-colour JSON clean", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "vectiscode-terminal-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const args = ["--claude-dir", root, "--codex-dir", root, "--opencode-dir", root];
+  const run = (json: boolean) => spawnSync(process.execPath, ["--input-type=module", "-e", `
+    Object.defineProperty(process.stderr, "isTTY", { value: true });
+    process.argv = [process.execPath, ...${JSON.stringify(args)}, ...${json ? '["--json"]' : '[]'}];
+    await import(${JSON.stringify(new URL("./cli.js", import.meta.url).href)});
+  `], { encoding: "utf8", env: { ...process.env, VECTISCODE_HOME: root, FORCE_COLOR: "1", NO_COLOR: "" } });
+  const text = run(false);
+  assert.equal(text.status, 0, text.stderr);
+  assert.equal(text.stderr, "Reading your logs...\r\r\x1b[2K");
+  const json = run(true);
+  assert.equal(json.status, 0);
+  assert.equal(json.stderr, "");
+  assert.doesNotMatch(json.stdout, /\x1b/);
+  assert.deepEqual(JSON.parse(json.stdout).findings, []);
 });

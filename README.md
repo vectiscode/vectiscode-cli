@@ -8,7 +8,7 @@ npx vectiscode
 
 vectiscode reads the session logs that Claude Code, Codex and OpenCode already keep on your computer and tells you where your usage went:
 
-- **Long chats.** How much ran with more than 150k tokens of context, which chats grew biggest, how often they were compacted, and what starting fresh chats at 150k would really have saved once each new chat pays to load its setup again.
+- **Long chats.** How much ran with more than 150k tokens of context, which chats grew biggest, how often they were compacted, and the upper bound on what fresh chats at 150k could have saved after paying to load each new chat's setup.
 - **Always-on context.** How big a new chat is before you type anything, what that setup is made of (tool definitions, system prompt, skills list, CLAUDE.md), and which tools were sent with every request but never called.
 - **Tool results.** What the files Claude read, the commands it ran and the screenshots it took cost you: each result is written to the cache once and re-read by every later step. By tool, with the biggest single result.
 - **Cache after breaks.** What it cost to come back to a big chat after its cache expired.
@@ -31,13 +31,13 @@ npx vectiscode compare 2026-10-17
 ```
 
 ```
-Claude Code                     before     after
-  units per request              0.098     0.092  −7%
-  units per active hour           11.7      19.2  +65%
-  average context                 244k      195k  −20%
-  usage past 150k context          67%       66%
-  new chats start at               74k       69k  −6%
-  compactions per chat             2.0       2.0
+ CLAUDE CODE                      before     after
+   units per request               0.098     0.092  ▼ 7%
+   units per active hour            11.7      19.2  ▲ 65%
+   average context                  244k      195k  ▼ 20%
+   usage past 150k context           67%       66%
+   new chats start at                74k       69k  ▼ 6%
+   compactions per chat              2.0       2.0
 ```
 
 It looks at the 7 days before the date (change that with `--days`) and everything since. Rates are per request and per active hour, so periods of different lengths still compare. More parallel work raises usage per hour even when each request got cheaper, as in the example above.
@@ -53,6 +53,8 @@ It looks at the 7 days before the date (change that with `--days`) and everythin
 | `--claude-dir <dir>` | Claude Code folder (default `$CLAUDE_CONFIG_DIR` or `~/.claude`) |
 | `--codex-dir <dir>` | Codex folder (default `$CODEX_HOME` or `~/.codex`) |
 | `--opencode-dir <dir>` | folder holding `opencode.db` (default `$XDG_DATA_HOME/opencode` or `~/.local/share/opencode`) |
+
+Reports fit your terminal, up to 100 columns. Piped output keeps the same layout without colour. Set `NO_COLOR=1` to disable colour or `FORCE_COLOR=1` to keep it when piping. `COLUMNS` sets the width when no terminal is attached. JSON output stays plain JSON.
 
 ## How the numbers work
 

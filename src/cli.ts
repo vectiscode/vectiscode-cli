@@ -82,9 +82,11 @@ async function read(since: number) {
   const opencodeDir = values["opencode-dir"] ?? join(process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"), "opencode");
   const status = process.stderr.isTTY && !values.json;
   if (status) process.stderr.write("Reading your logs...\r");
-  const data = await Promise.all([readClaude(claudeDir, since), readCodex(codexDir, since), readOpenCode(join(opencodeDir, "opencode.db"), since)]);
-  if (status) process.stderr.write("                   \r");
-  return data;
+  try {
+    return await Promise.all([readClaude(claudeDir, since), readCodex(codexDir, since), readOpenCode(join(opencodeDir, "opencode.db"), since)]);
+  } finally {
+    if (status) process.stderr.write("\r\x1b[2K");
+  }
 }
 
 /** A plain date means local midnight, not UTC. */

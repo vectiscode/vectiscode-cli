@@ -177,6 +177,7 @@ test("fresh chats pay off when a chat keeps growing", () => {
   });
   const requests = Array.from({ length: 200 }, (_, i) => req(i, 20_000 + i * 2_000));
   const long = analyze({ requests, sessions: new Map() }, undefined, SINCE).findings.find((f) => f.id === "long-chats")!;
-  assert.match(long.facts[1]!, /^Starting a fresh chat at 150k would have saved about .* to set up each of 3 more chats\.$/);
+  assert.match(long.facts[1]!, /^Starting a fresh chat at 150k would have saved up to .* to set up each of 3 more chats\.$/);
+  assert.match(long.title, /saved up to/);
   assert.ok(long.share > 0.1);
 });

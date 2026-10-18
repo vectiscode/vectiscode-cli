@@ -144,7 +144,7 @@ function longChats(claude: SourceData | undefined, codex: CodexData | undefined,
     if (fresh.restarts) {
       facts.push(
         fresh.saved > 0
-          ? `Starting a fresh chat at ${k(LONG)} would have saved about ${units(fresh.saved)} units, ${pct(share)} of your Claude usage, after paying about ${fresh.setup.toFixed(2)} units to set up each of ${fresh.restarts} more ${plural(fresh.restarts, "chat")}.`
+          ? `Starting a fresh chat at ${k(LONG)} would have saved up to ${units(fresh.saved)} units, up to ${pct(share)} of your Claude usage, after paying about ${fresh.setup.toFixed(2)} units to set up each of ${fresh.restarts} more ${plural(fresh.restarts, "chat")}.`
           : `Starting fresh chats at ${k(LONG)} would not have saved anything: setting up ${fresh.restarts} more ${plural(fresh.restarts, "chat")} at about ${fresh.setup.toFixed(2)} units each costs as much as the shorter chats save.`,
       );
     }
@@ -185,13 +185,13 @@ function longChats(claude: SourceData | undefined, codex: CodexData | undefined,
   if (!hasClaude) share = codexOver;
   const level = hasClaude ? grade(share, 0.08, 0.04, 0.015) : grade(share, 0.5, 0.25, 0.1);
   const title = hasClaude
-    ? `Long chats: fresh chats at ${k(LONG)} would have saved ${pct(share)} of your Claude usage`
+    ? `Long chats: fresh chats at ${k(LONG)} would have saved up to ${pct(share)} of your Claude usage`
     : `Long chats: ${pct(share)} of your Codex usage went to turns past ${k(LONG)} tokens of context`;
   const fixes = [
     hasClaude &&
-      "Every step re-reads the whole chat, so each 100k of chat makes every later step cost more. In Claude Code, start a fresh chat from a short handoff note once a chat passes about 150k. Much sooner doesn't pay, because each new chat has to load its setup again.",
+      "In Claude Code, start a fresh chat from a short handoff note once a chat passes about 150k. Much sooner doesn't pay, because each new chat loads its setup again.",
     codex?.requests.length &&
-      "Codex charges nothing extra to cache a chat, so a new Codex chat costs about as much as one small step in a 170k chat: start fresh there sooner.",
+      "In Codex, start fresh sooner: a new chat costs about as much as one small step in a 170k chat.",
     "Fresh chats also keep the detail that compaction throws away.",
   ];
   return {
@@ -294,7 +294,7 @@ function alwaysOn(claude: SourceData | undefined, codex: CodexData | undefined, 
     title: level === "ok" ? "Always-on context" : `Always-on context: ${pct(share)} of your Claude usage is re-sending the same setup`,
     share,
     facts,
-    fix: "The system prompt, every tool definition, MCP servers, skills and CLAUDE.md files go out with every single request. Turn off MCP servers and plugins a project doesn't use, deny unused built-in tools with permissions.deny in settings.json, and keep instruction files short.",
+    fix: "Turn off MCP servers and plugins a project doesn't use. Deny unused built-in tools with permissions.deny in settings.json and shorten instruction files. Your system prompt, tool definitions, skills and CLAUDE.md go out with every request.",
   };
 }
 
@@ -328,7 +328,7 @@ function cacheBreaks(claude: SourceData | undefined): Finding | null {
     title: level === "ok" ? "Cache after breaks" : `Coming back to big chats after a break cost ${pct(share)} of your Claude usage`,
     share,
     facts,
-    fix: "The cache keeps a chat for about an hour (5 minutes for some requests). After that, the next step pays to write the whole chat again. Before a long break, finish the step and continue in a fresh chat afterwards, or run /compact first so the rewrite is small.",
+    fix: "Before a long break, finish the step and continue in a fresh chat, or run /compact so the rewrite is small. The cache lasts about an hour (5 minutes for some requests); after that, the next step pays to write the whole chat again.",
   };
 }
 
@@ -346,7 +346,7 @@ function helpers(claude: SourceData | undefined): Finding | null {
     title: level === "ok" ? "Helpers and subagents" : `Helpers and subagents: ${pct(share)} of your Claude usage`,
     share,
     facts: [`By type: ${types.slice(0, 5).map((t) => `${t.name} ${pct(t.share)}`).join(", ")}.`],
-    fix: "Each helper starts its own context with its own tools and instructions. Keep the types that save main-chat work, give them a cheaper model where the result holds up, and cap how many a single workflow can start.",
+    fix: "Keep helpers that save main-chat work, use a cheaper model where results hold up and cap how many a workflow starts. Each helper loads its own tools and instructions.",
   };
 }
 
@@ -393,12 +393,12 @@ function toolResults(claude: SourceData | undefined): Finding | null {
   if (biggest) facts.push(`Biggest single result: ${biggest.tool}, ${k(biggest.tokens)} tokens in ${biggest.r.project} on ${day(biggest.r.time)}, re-read by ${biggest.later} later ${plural(biggest.later, "step")}.`);
   return {
     id: "tool-results",
-    action: "Keep tool results small: read files in slices, keep logs short",
+    action: "Keep tool results small: read files in slices, short logs",
     level,
     title: level === "ok" ? "Tool results" : `Tool results: ${pct(share)} of your Claude usage went to what tools returned`,
     share,
     facts,
-    fix: "Read files in slices or search them instead of opening them whole, keep command output short (the tail, counts, errors only), take screenshots only when something has to be judged by eye, and let a helper read big files and report back a summary.",
+    fix: "Read files in slices or search them. Keep command output to tails, counts and errors. Take screenshots for visual checks; let a helper summarize big files.",
   };
 }
 
