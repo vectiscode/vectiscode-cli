@@ -2,8 +2,10 @@ import { day, pct, units, type Finding, type Report } from "./checks.js";
 
 const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
 const paint = (code: string) => (s: string) => (useColor ? `\x1b[${code}m${s}\x1b[0m` : s);
-const bold = paint("1");
-const dim = paint("2");
+export const bold = paint("1");
+export const dim = paint("2");
+export const green = paint("32");
+export const red = paint("31");
 const LEVEL: Record<Finding["level"], (s: string) => string> = { high: paint("31"), medium: paint("33"), low: paint("36"), ok: paint("32") };
 
 const WIDTH = Math.min(process.stdout.columns || 100, 100);

@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { analyze } from "./checks.js";
 import { readClaude } from "./claude.js";
 import { limitDeltas, readCodex, severalAccounts } from "./codex.js";
+import { compare, renderComparison } from "./compare.js";
 import { projectName } from "./model.js";
 
 const START = Date.UTC(2026, 9, 1, 10, 0);
@@ -139,4 +140,30 @@ test("reads Codex logs: skips repeated totals and counts each limit window from 
   const report = analyze(undefined, codex, SINCE, SINCE);
   assert.equal(report.codex!.topChats[0]!.points, 7);
   assert.match(report.findings.find((f) => f.id === "long-chats")!.facts[0]!, /^Codex: 57% /);
+});
+
+test("names projects after their git repository, including worktrees", () => {
+  const root = mkdtempSync(join(tmpdir(), "vectiscode-repo-"));
+  mkdirSync(join(root, "game", ".git"), { recursive: true });
+  mkdirSync(join(root, "game", "src"));
+  mkdirSync(join(root, "wt", "fix-ui"), { recursive: true });
+  writeFileSync(join(root, "wt", "fix-ui", ".git"), `gitdir: ${join(root, "game", ".git", "worktrees", "fix-ui")}
+`);
+  assert.equal(projectName(join(root, "game", "src"), "x"), "game");
+  assert.equal(projectName(join(root, "wt", "fix-ui"), "x"), "game");
+});
+
+test("compares habits before and after a date", async () => {
+  const claude = await readClaude(claudeLogs(), 0);
+  const codex = await readCodex(codexLogs(), 0);
+  const { before, after } = compare(claude, codex, START + 100 * 60_000, SINCE, START + 200 * 60_000);
+  assert.equal(before.claude!.requests, 4);
+  assert.equal(after.claude!.requests, 2);
+  assert.equal(before.claude!.compactionsPerChat, 1);
+  assert.equal(after.claude!.compactionsPerChat, 0);
+  assert.equal(before.codex!.turns, 6);
+  assert.equal(after.codex, undefined);
+  const text = renderComparison({ before, after });
+  assert.match(text, /units per request/);
+  assert.match(text, /Codex: no turns since/);
 });

@@ -252,7 +252,7 @@ function helpers(claude: SourceData | undefined): Finding | null {
 }
 
 /** Points of the weekly Codex limit each turn used. */
-function turnPoints(limits: LimitSample[], since: number): Map<string, number> {
+export function turnPoints(limits: LimitSample[], since: number): Map<string, number> {
   const out = new Map<string, number>();
   for (const [s, d] of limitDeltas(limits, WEEK, since)) if (s.turn && s.limit === "codex") out.set(s.turn, (out.get(s.turn) ?? 0) + d);
   return out;
@@ -270,7 +270,7 @@ function chatStats(main: Request[], sessions: Map<string, Session>) {
 }
 
 /** Context of the first request of each chat with at least three requests. */
-function firstContexts(reqs: Request[]): Map<string, number> {
+export function firstContexts(reqs: Request[]): Map<string, number> {
   const count = new Map<string, number>();
   const first = new Map<string, number>();
   for (const r of reqs) {
@@ -322,7 +322,7 @@ export function sum<T>(xs: T[], f: (x: T) => number): number {
   return s;
 }
 
-function median(xs: number[]): number {
+export function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   return s[Math.floor(s.length / 2)] ?? 0;
 }

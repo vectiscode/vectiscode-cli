@@ -1,3 +1,7 @@
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, join } from "node:path";
+
 export type Source = "claude" | "codex";
 
 /** One model call, normalized across tools. Token counts are what the provider reported. */
@@ -56,8 +60,27 @@ export interface SourceData {
 
 export function projectName(cwd: string | undefined, fallback: string): string {
   if (!cwd) return fallback;
+  const dir = cwd.replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "");
   // Split on both separators: logs written on Windows can be read anywhere.
-  return cwd.replace(/[\\/]\.claude[\\/]worktrees[\\/].*$/, "").split(/[\\/]/).filter(Boolean).pop() || fallback;
+  return repoName(dir) ?? (dir.split(/[\\/]/).filter(Boolean).pop() || fallback);
+}
+
+const repos = new Map<string, string | null>();
+
+/** The name of the git repository a folder is in, so a chat started in its src folder still counts for the project. */
+function repoName(cwd: string): string | null {
+  if (repos.has(cwd)) return repos.get(cwd)!;
+  let name: string | null = null;
+  for (let dir = cwd; dir !== homedir() && dir !== dirname(dir); dir = dirname(dir)) {
+    const git = join(dir, ".git");
+    if (!existsSync(git)) continue;
+    // A worktree's .git is a file that points into the main repository: use that repository's name.
+    const main = statSync(git).isFile() ? /gitdir:\s*(.*?)[\\/]\.git[\\/]worktrees[\\/]/.exec(readFileSync(git, "utf8"))?.[1] : undefined;
+    name = basename(main ?? dir);
+    break;
+  }
+  repos.set(cwd, name);
+  return name;
 }
 
 export function sessionFor(sessions: Map<string, Session>, source: Source, id: string, project: string, time: number): Session {
