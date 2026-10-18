@@ -18,7 +18,17 @@ vectiscode reads the session logs that Claude Code, Codex and OpenCode already k
 
 Each finding comes with a fix, and the report opens with the three that matter most for you.
 
-Nothing leaves your computer. There is no account, no telemetry and no network call. Your session logs are only read, never changed. It keeps one small file, ~/.vectiscode/state.json, with the date of your last check, so the next run can show what changed.
+Nothing leaves your computer. There is no account, no telemetry and no network call, and the report is plain arithmetic on your logs: no AI model is called, so it uses none of your limits. Your session logs are only read, never changed. It keeps one small file, ~/.vectiscode/state.json, with the date of your last check, so the next run can show what changed.
+
+## Let your AI help
+
+Paste this into Claude Code, Codex or OpenCode. It runs the report, explains what matters for you and makes only the changes you say yes to:
+
+```text
+Run `npx -y vectiscode@latest`, explain my top three findings in plain words, and show me the exact change you would make for each one (settings, MCP servers, CLAUDE.md or AGENTS.md, or a habit). Wait for my yes before changing anything. Afterwards, remind me to run it again in a few days to see if it worked.
+```
+
+That chat uses about as much of your limit as a short task. The report also prints this prompt at the end when you run it in a terminal.
 
 ## Did the change work?
 

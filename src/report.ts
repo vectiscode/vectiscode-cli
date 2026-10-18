@@ -3,6 +3,8 @@ import { bold, cells, cyan, dim, green, gutter, magenta, numbers, orange, pad, p
 
 const LEVEL: Record<Finding["level"], (s: string) => string> = { high: paint("7;31"), medium: paint("7;33"), low: paint("7;36"), ok: green };
 const LABEL = 21;
+// The same prompt is on the website and in the README.
+const PROMPT = "Run `npx -y vectiscode@latest`, explain my top three findings in plain words, and show me the exact change you would make for each one (settings, MCP servers, CLAUDE.md or AGENTS.md, or a habit). Wait for my yes before changing anything. Afterwards, remind me to run it again in a few days to see if it worked.";
 
 export function render(report: Report, days: number | null, check?: { date?: number; rows: string[] }): string {
   const out: string[] = [];
@@ -65,6 +67,8 @@ export function render(report: Report, days: number | null, check?: { date?: num
       for (const fact of f.facts.filter((s) => s.startsWith("OpenCode:") || s.startsWith("A new OpenCode"))) out.push(wrap(dim(numbers(fact)), 9));
     }
   }
+  // Only for people at a terminal; an assistant running the report already has the prompt.
+  if (problems.length && process.stdout.isTTY) out.push("", wrap(bold("Want help with the fixes? Paste this into Claude Code, Codex or OpenCode:")), wrap(PROMPT, 3));
   if (check) out.push("", wrap(dim(check.date === undefined
     ? "Saved today's date. Run vectiscode again after a few days of work to see what changed."
     : "Next check: run it again in a few days to see what changed.")));

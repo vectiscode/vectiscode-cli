@@ -171,5 +171,6 @@
   });
   once(document.querySelector('.codex-number'), () => count(document.querySelector('.codex-number [data-count]')));
   all('.demo-notes .pen-drawing').forEach(svg => once(svg, () => draw(svg)));
+  once(document.querySelector('.prompt-card'), () => all('.ask-ai .pen-drawing').forEach((svg, i) => draw(svg, 600 + i * 350)));
   preference.addEventListener('change', event => { if (event.matches) finishAll(); });
 })();
