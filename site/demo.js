@@ -1,6 +1,7 @@
 (() => {
   document.documentElement.classList.add('js');
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+  let reducedMotion = motionPreference.matches;
   const tabs = [...document.querySelectorAll('.terminal-tabs [role="tab"]')];
   const panels = [...document.querySelectorAll('.terminal-panel')];
   const notes = [...document.querySelectorAll('.pen-note')];
@@ -15,7 +16,7 @@
     const lines = [...panels[active].querySelectorAll('.terminal-line')];
     for (const [selector, phrase, offset] of [
       ['.savings-note', 'Starting a fresh chat at 150k', 45],
-      ['.fix-note', '1. Start a fresh chat', 14],
+      ['.fix-note', 'Start a fresh chat from', 14],
       ['.compare-note', 'units per request', 14]
     ]) {
       const line = lines.find(line => line.textContent.includes(phrase));
@@ -145,7 +146,7 @@
       control.setAttribute('aria-checked', String(i === index));
       control.tabIndex = i === index ? 0 : -1;
     });
-    curves.forEach(curve => { curve.style.display = curve.dataset.curve === threshold ? '' : 'none'; });
+    curves.forEach(curve => { curve.classList.toggle('curve-visible', curve.dataset.curve === threshold); });
     if (threshold === 'real') readout.textContent = '124 units, one chat, 20 compactions';
     else {
       const { saving, chats } = data.fresh[threshold];
@@ -157,33 +158,12 @@
     control.addEventListener('click', () => selectChart(i));
     control.addEventListener('keydown', e => arrowNavigation(e, controls, i, selectChart));
   });
-  if (!reducedMotion) {
-    const penObserver = new IntersectionObserver(entries => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        for (const path of entry.target.querySelectorAll('path')) {
-          path.animate([{ strokeDashoffset: path.getTotalLength() }, { strokeDashoffset: 0 }], { duration: 850, easing: 'ease-out', fill: 'forwards' });
-        }
-        entry.target.dataset.drawn = 'true';
-        penObserver.unobserve(entry.target);
-      }
-    }, { threshold: .35 });
-    document.querySelectorAll('.pen-drawing').forEach(svg => {
-      svg.querySelectorAll('path').forEach(path => {
-        const length = path.getTotalLength();
-        path.style.strokeDasharray = length;
-        path.style.strokeDashoffset = length;
-      });
-      penObserver.observe(svg);
-    });
-    const path = document.querySelector('.real-line');
-    const observer = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting)) {
-        const length = path.getTotalLength();
-        path.animate([{ strokeDasharray: length, strokeDashoffset: length }, { strokeDasharray: length, strokeDashoffset: 0 }], { duration: 1100, easing: 'linear' });
-        observer.disconnect();
-      }
-    }, { threshold: .35 });
-    observer.observe(document.querySelector('.curve-chart'));
-  }
+  motionPreference.addEventListener('change', event => {
+    reducedMotion = event.matches;
+    if (reducedMotion) {
+      clearTimeout(timer);
+      ++run;
+      panels.forEach(finish);
+    }
+  });
 })();

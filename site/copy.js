@@ -16,7 +16,7 @@ for (const button of document.querySelectorAll('[data-copy]')) {
         button.focus();
         if (!copied) throw new Error('Clipboard unavailable');
       }
-      button.textContent = 'Copied';
+      button.innerHTML = '<svg class="copy-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8l4 4 8-8"/></svg>Copied';
       button.classList.add('done');
       status.textContent = 'Command copied.';
       setTimeout(() => {
