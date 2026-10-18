@@ -128,27 +128,41 @@ function longChats(claude: SourceData | undefined, codex: CodexData | undefined,
     }
   }
 
+  let codexOver = 0;
   if (codex?.requests.length) {
     const points = sum(codex.requests, (r) => weekly.get(r.id) ?? 0);
     if (points > 0) {
-      const over = sum(codex.requests.filter((r) => r.context > LONG), (r) => weekly.get(r.id) ?? 0) / points;
-      facts.push(`Codex: ${pct(over)} of the weekly limit you used went to turns past ${k(LONG)} tokens of context.`);
+      codexOver = sum(codex.requests.filter((r) => r.context > LONG), (r) => weekly.get(r.id) ?? 0) / points;
+      facts.push(`Codex: ${pct(codexOver)} of the weekly limit you used went to turns past ${k(LONG)} tokens of context.`);
     } else {
       const input = sum(codex.requests, (r) => r.context) || 1;
-      const over = sum(codex.requests.filter((r) => r.context > LONG), (r) => r.context) / input;
-      facts.push(`Codex: ${pct(over)} of the tokens you sent were in turns past ${k(LONG)} tokens of context.`);
+      codexOver = sum(codex.requests.filter((r) => r.context > LONG), (r) => r.context) / input;
+      facts.push(`Codex: ${pct(codexOver)} of the tokens you sent were in turns past ${k(LONG)} tokens of context.`);
     }
   }
 
   if (!facts.length) return null;
-  const level = grade(share, 0.08, 0.04, 0.015);
+  // Without Claude Code there is nothing to simulate, so Codex is graded on how much ran in long chats.
+  const hasClaude = claudeTotal > 0;
+  if (!hasClaude) share = codexOver;
+  const level = hasClaude ? grade(share, 0.08, 0.04, 0.015) : grade(share, 0.5, 0.25, 0.1);
+  const title = hasClaude
+    ? `Long chats: fresh chats at ${k(LONG)} would have saved ${pct(share)} of your Claude usage`
+    : `Long chats: ${pct(share)} of your Codex usage went to turns past ${k(LONG)} tokens of context`;
+  const fixes = [
+    hasClaude &&
+      "Every step re-reads the whole chat, so each 100k of chat makes every later step cost more. In Claude Code, start a fresh chat from a short handoff note once a chat passes about 150k. Much sooner doesn't pay, because each new chat has to load its setup again.",
+    codex?.requests.length &&
+      "Codex charges nothing extra to cache a chat, so a new Codex chat costs about as much as one small step in a 170k chat: start fresh there sooner.",
+    "Fresh chats also keep the detail that compaction throws away.",
+  ];
   return {
     id: "long-chats",
     level,
-    title: level === "ok" ? "Chat length" : `Long chats: fresh chats at ${k(LONG)} would have saved ${pct(share)} of your Claude usage`,
+    title: level === "ok" ? "Chat length" : title,
     share,
     facts,
-    fix: "Every step re-reads the whole chat, so each 100k of chat makes every later step cost more. Start a fresh chat from a short handoff note once a chat passes about 150k. Much sooner doesn't pay, because each new chat has to load its setup again. Fresh chats also keep the detail that compaction throws away.",
+    fix: fixes.filter(Boolean).join(" "),
   };
 }
 
