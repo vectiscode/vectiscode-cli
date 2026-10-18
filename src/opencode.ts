@@ -16,11 +16,20 @@ export async function readOpenCode(dbPath: string, since: number): Promise<Sourc
   }
   const db = new sqlite.DatabaseSync(dbPath, { readOnly: true });
   try {
-    const rows = db.prepare(`
+    // OpenCode moved chats from session and message to session_v2 and session_message in August 2026.
+    const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((t) => String(t.name)));
+    const v2 = tables.has("session_v2") && tables.has("session_message");
+    if (!v2 && !(tables.has("session") && tables.has("message"))) throw new Error("its database layout is new to vectiscode");
+    const rows = db.prepare(v2 ? `
       SELECT m.id, m.session_id, m.type, m.time_created, m.data, s.parent_id, s.directory
       FROM session_message m JOIN session_v2 s ON s.id = m.session_id
       WHERE m.type IN ('assistant', 'compaction') AND m.time_created >= ?
       ORDER BY m.time_created, m.seq
+    ` : `
+      SELECT m.id, m.session_id, m.time_created, m.data, s.parent_id, s.directory
+      FROM message m JOIN session s ON s.id = m.session_id
+      WHERE m.time_created >= ?
+      ORDER BY m.time_created, m.id
     `).iterate(since);
     for (const row of rows) {
       let data;
@@ -29,7 +38,8 @@ export async function readOpenCode(dbPath: string, since: number): Promise<Sourc
       } catch {
         continue; // A malformed message should not hide the rest of the history.
       }
-      if (!data || typeof data !== "object") continue;
+      if (!data || typeof data !== "object" || (!v2 && data.role !== "assistant")) continue;
+      const compaction = v2 ? row.type === "compaction" : data.summary === true;
       const tokens = data.tokens ?? {};
       const time = Number(data.time?.created ?? row.time_created);
       if (!(time >= since)) continue;
@@ -37,7 +47,7 @@ export async function readOpenCode(dbPath: string, since: number): Promise<Sourc
       const session = sessionFor(sessions, "opencode", id, projectName(row.directory ? String(row.directory) : undefined, "unknown"), time);
       const req: Request = {
         source: "opencode", id: String(row.id), session: id, thread: id, project: session.project, time,
-        model: data.model?.id ?? "unknown",
+        model: data.model?.id ?? data.modelID ?? "unknown",
         agent: row.parent_id ? data.agent || "helper" : "main",
         input: tokens.input ?? 0,
         cacheRead: tokens.cache?.read ?? 0,
@@ -49,7 +59,7 @@ export async function readOpenCode(dbPath: string, since: number): Promise<Sourc
       req.context = req.input + req.cacheRead + req.cacheWrite5m;
       req.cost = data.cost > 0 ? data.cost : cost(req);
       requests.push(req);
-      if (row.type === "compaction") session.compactions.push({ time, tokens: req.context });
+      if (compaction) session.compactions.push({ time, tokens: req.context });
     }
   } finally {
     db.close();

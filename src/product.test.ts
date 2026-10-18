@@ -282,3 +282,66 @@ test("CLI clears the entire reading status and keeps forced-colour JSON clean", 
   assert.doesNotMatch(json.stdout, /\x1b/);
   assert.deepEqual(JSON.parse(json.stdout).findings, []);
 });
+
+test("reads OpenCode's older layout and skips a source it can't read without stopping the report", async (t) => {
+  let sqlite: typeof import("node:sqlite");
+  try {
+    sqlite = await import("node:sqlite");
+  } catch {
+    t.skip("node:sqlite is unavailable");
+    return;
+  }
+  const root = mkdtempSync(join(tmpdir(), "vectiscode-opencode-v1-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const older = join(root, "older");
+  mkdirSync(older);
+  // OpenCode before August 2026: chats in session and message, with an unused session_message beside them.
+  const db = new sqlite.DatabaseSync(join(older, "opencode.db"));
+  db.exec(`
+    CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT, parent_id TEXT, directory TEXT, time_created INTEGER);
+    CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, time_updated INTEGER, data TEXT);
+    CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, type TEXT, seq INTEGER, time_created INTEGER, data TEXT);
+    INSERT INTO session VALUES ('main', 'p', NULL, '/work/older', 0), ('child', 'p', 'main', '/work/older', 0);
+  `);
+  const insert = db.prepare("INSERT INTO message VALUES (?, ?, ?, ?, ?)");
+  const assistant = (time: number, extra: object = {}) => JSON.stringify({
+    role: "assistant", time: { created: time }, modelID: "gpt-test", providerID: "test", agent: "build", cost: 0.1,
+    tokens: { input: 500, output: 40, reasoning: 10, cache: { read: 20_000, write: 1000 } }, ...extra,
+  });
+  insert.run("u1", "main", START, START, JSON.stringify({ role: "user", time: { created: START } }));
+  insert.run("a1", "main", START + 1000, START + 1000, assistant(START + 1000));
+  insert.run("a2", "child", START + 2000, START + 2000, assistant(START + 2000, { agent: "explore" }));
+  insert.run("c1", "main", START + 3000, START + 3000, assistant(START + 3000, { summary: true, agent: "compaction" }));
+  insert.run("bad", "main", START + 4000, START + 4000, "{");
+  db.close();
+  const data = await readOpenCode(join(older, "opencode.db"), START);
+  assert.deepEqual(data.requests.map((r) => [r.id, r.model, r.agent, r.project]), [["a1", "gpt-test", "main", "older"], ["a2", "gpt-test", "explore", "older"], ["c1", "gpt-test", "main", "older"]]);
+  assert.equal(data.requests[0]!.context, 21_500);
+  assert.equal(data.requests[0]!.output, 50);
+  assert.equal(data.requests[0]!.cost, 0.1);
+  assert.deepEqual(data.sessions.get("main")!.compactions, [{ time: START + 3000, tokens: 21_500 }]);
+
+  const unknown = join(root, "unknown");
+  mkdirSync(unknown);
+  const other = new sqlite.DatabaseSync(join(unknown, "opencode.db"));
+  other.exec("CREATE TABLE something_else (id TEXT)");
+  other.close();
+  const corrupt = join(root, "corrupt");
+  mkdirSync(corrupt);
+  writeFileSync(join(corrupt, "opencode.db"), "this is not a database\n".repeat(200));
+
+  const cli = fileURLToPath(new URL("./cli.js", import.meta.url));
+  const run = (dir: string) => spawnSync(process.execPath, [cli, "--since", "2026-09-30", "--claude-dir", dir, "--codex-dir", dir, "--opencode-dir", dir],
+    { encoding: "utf8", env: { ...process.env, VECTISCODE_HOME: dir, NO_COLOR: "1" } });
+  const read = run(older);
+  assert.equal(read.status, 0, read.stderr);
+  assert.match(read.stdout, /OPENCODE\s+3 requests · 2 chats/);
+  assert.doesNotMatch(read.stderr, /Skipped/);
+  for (const [dir, reason] of [[unknown, /Skipped OpenCode: its database layout is new to vectiscode\.\n/], [corrupt, /Skipped OpenCode: .+\.\n/]] as const) {
+    const result = run(dir);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /No Claude Code, Codex or OpenCode logs found/);
+    assert.match(result.stderr, reason);
+    assert.match(result.stderr, /The rest of the report is complete\. If this keeps happening, please open an issue: https:\/\/github\.com\/vectiscode\/vectiscode-cli\/issues\n$/);
+  }
+});

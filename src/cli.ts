@@ -7,7 +7,7 @@ import { analyze } from "./checks.js";
 import { readClaude } from "./claude.js";
 import { readCodex } from "./codex.js";
 import { activeHours, compare, recentChanges, renderComparison } from "./compare.js";
-import { filterSource } from "./model.js";
+import { filterSource, type SourceData } from "./model.js";
 import { readOpenCode } from "./opencode.js";
 import { render } from "./report.js";
 import { lastCheck, saveCheck } from "./state.js";
@@ -29,6 +29,16 @@ Usage: npx vectiscode [options]
   -h, --help          print this help
 
 Nothing is uploaded. Logs are only read; only the last-check date is saved.`;
+
+const ISSUES = "https://github.com/vectiscode/vectiscode-cli/issues";
+const skipped: string[] = [];
+
+// Anything unexpected ends with a clear next step instead of a stack trace.
+process.on("uncaughtException", (error) => {
+  if (process.stderr.isTTY) process.stderr.write("\r\x1b[2K");
+  console.error(`vectiscode stopped: ${error?.message ?? error}\nPlease open an issue with this message and your Node version (${process.version}): ${ISSUES}`);
+  process.exit(1);
+});
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -56,6 +66,7 @@ if (values.help) {
   const [claude, codex, opencode] = await read(from);
   const comparison = compare(claude, codex, date, from, Date.now(), opencode);
   console.log(values.json ? JSON.stringify(comparison, null, 2) : renderComparison(comparison));
+  warnSkipped();
 } else if (positionals.length) {
   fail(`Unknown command: ${positionals[0]}. Run npx vectiscode --help for the options.`);
 } else {
@@ -73,6 +84,7 @@ if (values.help) {
   const rows = previous !== undefined && due && activeHours(active) >= 3
     ? recentChanges(compare(claude, codex, previous, previous - 7 * 86_400_000, now, opencode)) : [];
   console.log(values.json ? JSON.stringify(report, null, 2) : render(report, days, { date: previous, rows }));
+  warnSkipped();
   if (!values.json && due) saveCheck(now, JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
 }
 
@@ -83,10 +95,28 @@ async function read(since: number) {
   const status = process.stderr.isTTY && !values.json;
   if (status) process.stderr.write("Reading your logs...\r");
   try {
-    return await Promise.all([readClaude(claudeDir, since), readCodex(codexDir, since), readOpenCode(join(opencodeDir, "opencode.db"), since)]);
+    return await Promise.all([
+      safely("Claude Code", () => readClaude(claudeDir, since)),
+      safely("Codex", () => readCodex(codexDir, since)),
+      safely("OpenCode", () => readOpenCode(join(opencodeDir, "opencode.db"), since)),
+    ]);
   } finally {
     if (status) process.stderr.write("\r\x1b[2K");
   }
+}
+
+/** One unreadable source must not stop the report for the others. */
+async function safely<T extends SourceData>(name: string, reading: () => Promise<T>): Promise<T> {
+  try {
+    return await reading();
+  } catch (error) {
+    skipped.push(`Skipped ${name}: ${String(error instanceof Error ? error.message : error).replace(/\.$/, "")}.`);
+    return { requests: [], sessions: new Map(), limits: [] } as unknown as T;
+  }
+}
+
+function warnSkipped() {
+  if (skipped.length) console.error(`${skipped.join("\n")}\nThe rest of the report is complete. If this keeps happening, please open an issue: ${ISSUES}`);
 }
 
 /** A plain date means local midnight, not UTC. */
