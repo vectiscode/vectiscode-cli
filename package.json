@@ -1,6 +1,6 @@
 {
   "name": "vectiscode",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Find out why your Claude Code and Codex limits drain, and what to change. Runs locally on your own logs.",
   "keywords": [
     "claude-code",
